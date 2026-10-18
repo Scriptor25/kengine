@@ -1,0 +1,8 @@
+type = "application"
+name = "app"
+
+[application]
+main = "MainKt"
+include = ["main"]
+
+[sources.main]
