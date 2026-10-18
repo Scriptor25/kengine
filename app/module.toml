@@ -6,3 +6,6 @@ main = "MainKt"
 include = ["main"]
 
 [sources.main]
+
+[dependencies]
+modules = ["engine"]

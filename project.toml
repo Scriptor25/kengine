@@ -5,7 +5,10 @@ group = "dev.example"
 version = "1.0.0"
 
 [modules]
-include = ["app"]
+include = [
+    "app",
+    "engine",
+]
 
 [repositories]
 maven = ["https://repo1.maven.org/maven2/"]
