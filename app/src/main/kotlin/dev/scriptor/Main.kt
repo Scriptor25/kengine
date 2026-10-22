@@ -26,7 +26,7 @@ object Context {
     @OptIn(ExperimentalAtomicApi::class)
     val running = AtomicBoolean(true)
 
-    const val SCALE = 2
+    const val SCALE = 4
 
     var width: Int = 0
     var height: Int = 0
@@ -449,22 +449,22 @@ fun main() {
 
     val vertexBuffer = ByteBuffer.allocate(4 * pipeline.stride)
         // 0
-        .putVec3f(-0.2f, -0.2f, 0.0f)
+        .putVec3f(-0.5f, -0.5f, 0.0f)
         .putVec3f(0.0f, 0.0f, -1.0f)
         .putVec2f(0.0f, 0.0f)
         .putVec4f(0.0f, 0.0f, 1.0f, 1.0f)
         // 1
-        .putVec3f(-0.2f, 0.2f, 0.0f)
+        .putVec3f(-0.5f, 0.5f, 0.0f)
         .putVec3f(0.0f, 0.0f, -1.0f)
         .putVec2f(0.0f, 1.0f)
         .putVec4f(0.0f, 1.0f, 0.0f, 1.0f)
         // 2
-        .putVec3f(0.2f, 0.2f, 0.0f)
+        .putVec3f(0.5f, 0.5f, 0.0f)
         .putVec3f(0.0f, 0.0f, -1.0f)
         .putVec2f(1.0f, 1.0f)
         .putVec4f(1.0f, 1.0f, 1.0f, 1.0f)
         // 3
-        .putVec3f(0.2f, -0.2f, 0.0f)
+        .putVec3f(0.5f, -0.5f, 0.0f)
         .putVec3f(0.0f, 0.0f, -1.0f)
         .putVec2f(1.0f, 0.0f)
         .putVec4f(1.0f, 0.0f, 0.0f, 1.0f)
