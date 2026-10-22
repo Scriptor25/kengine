@@ -2,7 +2,7 @@ type = "application"
 name = "app"
 
 [application]
-main = "MainKt"
+main = "dev.scriptor.MainKt"
 include = ["main"]
 
 [sources.main]
