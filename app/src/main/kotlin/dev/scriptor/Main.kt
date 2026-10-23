@@ -11,8 +11,6 @@ import java.awt.event.KeyEvent
 import java.awt.image.BufferedImage
 import java.awt.image.DataBufferInt
 import java.nio.ByteBuffer
-import java.nio.IntBuffer
-import java.util.*
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.math.absoluteValue
@@ -23,7 +21,7 @@ object Context {
     @OptIn(ExperimentalAtomicApi::class)
     val running = AtomicBoolean(true)
 
-    const val SCALE = 1
+    const val SCALE = 4
 
     var width: Int = 0
     var height: Int = 0
@@ -35,18 +33,22 @@ object Context {
 
     lateinit var image: BufferedImage
         private set
+    lateinit var depth: FloatArray
+        private set
 
-    val buffer: DataBufferInt
-        get() = image.raster.dataBuffer as DataBufferInt
+    val color: IntArray
+        get() = (image.raster.dataBuffer as DataBufferInt).data
 
     fun allocate(first: Boolean = false) {
         if (!first && image.width == scaledWidth && image.height == scaledHeight) return
 
         image = BufferedImage(scaledWidth, scaledHeight, BufferedImage.TYPE_INT_RGB)
+        depth = FloatArray(scaledWidth * scaledHeight)
     }
 
     fun clear() {
-        Arrays.fill(buffer.data, 0xff000000.toInt())
+        color.fill(0x00000000)
+        depth.fill(Float.MAX_VALUE)
     }
 }
 
@@ -97,12 +99,20 @@ fun main() {
         override val height: Int
             get() = Context.scaledHeight
 
-        override fun get(index: Int): Int {
-            return Context.buffer.data[index]
+        override fun color(index: Int): Int {
+            return Context.color[index]
         }
 
-        override fun set(index: Int, value: Int) {
-            Context.buffer.data[index] = value
+        override fun color(index: Int, value: Int) {
+            Context.color[index] = value
+        }
+
+        override fun depth(index: Int): Float {
+            return Context.depth[index]
+        }
+
+        override fun depth(index: Int, value: Float) {
+            Context.depth[index] = value
         }
     }
 
@@ -124,6 +134,7 @@ fun main() {
 
     val defaultVertexShader = vertexShader {
         val transform = uniform<Mat4fc>()
+        val model = uniform<Mat4fc>()
 
         val inPosition = input<Vec3fc>(0)
         val inNormal = input<Vec3fc>(1)
@@ -159,8 +170,11 @@ fun main() {
         main {
             position(transform() * Vec4f(inPosition(), 1.0f))
 
-            outPosition(inPosition())
-            outNormal(inNormal())
+            val pos = model() * Vec4f(inPosition(), 1.0f)
+            val nor = model() * Vec4f(inNormal(), 0.0f)
+
+            outPosition(pos.xyz / pos.w)
+            outNormal(nor.xyz)
             outTexture(inTexture())
             outColor(inColor())
         }
@@ -172,8 +186,12 @@ fun main() {
         val inTexture = input<Vec2fc>(2)
         val inColor = input<Vec4fc>(3)
 
+        val sun = Vec3f(0.5f, 1.0f, 1.0f).normalizeAssign()
+
         main {
-            color(Vec4f(inTexture(), 0.0f, 1.0f))
+            val t = (sun dot inNormal()).coerceIn(0.01f, 1.0f)
+
+            color(Vec4f(t, t, t, 1.0f))
         }
     }
 
@@ -214,12 +232,33 @@ fun main() {
             .putVec2f(1.0f, 0.0f)
             .putVec4f(1.0f, 0.0f, 0.0f, 1.0f)
             .flip(),
-        indexBuffer = IntBuffer.allocate(6)
-            .put(0).put(1).put(2)
-            .put(2).put(3).put(0)
+        elementBuffer = ByteBuffer.allocate(6 * Int.SIZE_BYTES)
+            .putInt(0).putInt(1).putInt(2)
+            .putInt(2).putInt(3).putInt(0)
             .flip(),
         count = 6,
     )
+
+    val cubeObjectStream = ClassLoader.getSystemResourceAsStream("cube.obj")
+        ?: error("missing resource")
+    val cubeObject = ObjectFile.load(cubeObjectStream)
+    val cubeMesh = cubeObject.generate { vertices, position, texture, normal ->
+        vertices += position[0]
+        vertices += position[1]
+        vertices += position[2]
+
+        vertices += normal[0]
+        vertices += normal[1]
+        vertices += normal[2]
+
+        vertices += texture[0]
+        vertices += texture[1]
+
+        vertices += 1.0f
+        vertices += 1.0f
+        vertices += 1.0f
+        vertices += 1.0f
+    }
 
     var time = Clock.System.now()
 
@@ -243,23 +282,47 @@ fun main() {
                 Context.allocate()
                 Context.clear()
 
-                val transform =
-                    Mat4fc.perspective(
-                        fovY = 70.0f,
-                        aspect = Context.width.toFloat() / Context.height.toFloat(),
-                        near = 0.1f,
-                        far = 100.0f,
-                    ) * Mat4fc.trs(
-                        translation = Vec3f(0.0f, 0.0f, -4.0f),
-                        rotation = Vec3f(angle, angle * 0.32f, angle * 0.23f),
-                        scale = Vec3f(1.0f),
-                    )
+                val perspective = Mat4fc.perspective(
+                    fovY = 70.0f,
+                    aspect = Context.width.toFloat() / Context.height.toFloat(),
+                    near = 0.1f,
+                    far = 100.0f,
+                )
+
+                val pivot = Mat4fc.translation(-0.5f, -0.5f, -0.5f)
+
+                val model1 = Mat4fc.trs(
+                    translation = Vec3f(-1.0f, 0.0f, -4.0f),
+                    rotation = Vec3f(angle, angle * 0.32f, angle * 0.23f),
+                    scale = Vec3f(1.0f),
+                ) * pivot
+                val transform1 = perspective * model1
+
+                val model2 = Mat4fc.trs(
+                    translation = Vec3f(1.0f, 0.0f, -4.0f),
+                    rotation = Vec3f(angle * 0.43f, angle * 0.17f, angle * 0.67f),
+                    scale = Vec3f(1.0f),
+                ) * pivot
+                val transform2 = perspective * model2
 
                 angle += speed
 
-                val defaultUniforms = arrayOf(transform)
-
-                defaultPipeline(surface, defaultMesh, defaultUniforms)
+                defaultPipeline(
+                    surface,
+                    cubeMesh,
+                    arrayOf(
+                        transform1,
+                        model1,
+                    ),
+                )
+                defaultPipeline(
+                    surface,
+                    cubeMesh,
+                    arrayOf(
+                        transform2,
+                        model2,
+                    ),
+                )
 
                 for (particle in particles) {
                     particle // TODO: draw(...)

@@ -15,6 +15,12 @@ interface Vec2fc {
     val length
         get() = sqrt(x * x + y * y)
 
+    operator fun get(i: Int): Float = when (i) {
+        0 -> x
+        1 -> y
+        else -> error("index $i out of bounds")
+    }
+
     operator fun plus(v: Vec2fc): Vec2f = Vec2f(x + v.x, y + v.y)
     operator fun minus(v: Vec2fc): Vec2f = Vec2f(x - v.x, y - v.y)
     operator fun times(t: Float): Vec2f = Vec2f(x * t, y * t)

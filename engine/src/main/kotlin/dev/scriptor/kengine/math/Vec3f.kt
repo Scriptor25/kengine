@@ -58,6 +58,13 @@ data class Vec3f(
     constructor(xy: Vec2fc, z: Float) : this(xy.x, xy.y, z)
     constructor(v: Vec3fc) : this(v.x, v.y, v.z)
 
+    operator fun set(i: Int, value: Float) = when (i) {
+        0 -> x = value
+        1 -> y = value
+        2 -> z = value
+        else -> error("index $i out of bounds")
+    }
+
     operator fun plusAssign(v: Vec3fc) {
         x += v.x
         y += v.y
@@ -92,6 +99,14 @@ data class Vec3f(
         x += v.x * t
         y += v.y * t
         z += v.z * t
+        return this
+    }
+
+    fun normalizeAssign(): Vec3f {
+        val invL = 1.0f / sqrt(x * x + y * y + z * z)
+        x *= invL
+        y *= invL
+        z *= invL
         return this
     }
 

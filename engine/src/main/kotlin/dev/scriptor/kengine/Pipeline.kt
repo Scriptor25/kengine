@@ -2,7 +2,6 @@ package dev.scriptor.kengine
 
 import dev.scriptor.kengine.math.*
 import java.nio.ByteBuffer
-import java.nio.IntBuffer
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -90,8 +89,11 @@ interface Surface {
     val width: Int
     val height: Int
 
-    operator fun get(index: Int): Int
-    operator fun set(index: Int, value: Int)
+    fun color(index: Int): Int
+    fun color(index: Int, value: Int)
+
+    fun depth(index: Int): Float
+    fun depth(index: Int, value: Float)
 }
 
 class RuntimeShaderContext(
@@ -453,7 +455,7 @@ class GraphicsPipeline(
         invoke(
             surface,
             mesh.vertexBuffer,
-            mesh.indexBuffer,
+            mesh.elementBuffer,
             0,
             mesh.count,
             uniforms,
@@ -463,7 +465,7 @@ class GraphicsPipeline(
     operator fun invoke(
         surface: Surface,
         vertexBuffer: ByteBuffer,
-        indexBuffer: IntBuffer,
+        elementBuffer: ByteBuffer,
         first: Int,
         count: Int,
         uniforms: Array<out Any> = emptyArray(),
@@ -492,9 +494,9 @@ class GraphicsPipeline(
         val bins = Array(tilesX * tilesY) { mutableListOf<RasterTriangle>() }
 
         for (index in first until first + count step 3) {
-            val i0 = indexBuffer.get(index)
-            val i1 = indexBuffer.get(index + 1)
-            val i2 = indexBuffer.get(index + 2)
+            val i0 = elementBuffer.getInt(Int.SIZE_BYTES * (index + 0))
+            val i1 = elementBuffer.getInt(Int.SIZE_BYTES * (index + 1))
+            val i2 = elementBuffer.getInt(Int.SIZE_BYTES * (index + 2))
 
             val triangle = clipVertexTriangle(
                 vso[i0],
@@ -556,10 +558,8 @@ class GraphicsPipeline(
                         ) { fragment ->
                             val index = fragment.x + fragment.y * surface.width
 
-                            val z = fragment.depth.coerceIn(0.0f, 1.0f)
-
-                            val depth = (z * 255.999f).toInt() and 0xff
-                            val depthBuffer = (surface[index] ushr 24) and 0xff
+                            val depth = fragment.depth.coerceIn(0.0f, 1.0f)
+                            val depthBuffer = surface.depth(index)
 
                             if (depth < depthBuffer) {
                                 val weights = fragment.perspectiveWeights()
@@ -592,7 +592,8 @@ class GraphicsPipeline(
                                 val g = (color.y.coerceIn(0.0f, 1.0f) * 255.999f).toInt() and 0xff
                                 val b = (color.z.coerceIn(0.0f, 1.0f) * 255.999f).toInt() and 0xff
 
-                                surface[index] = (depth shl 24) or (r shl 16) or (g shl 8) or b
+                                surface.color(index, (r shl 16) or (g shl 8) or b)
+                                surface.depth(index, depth)
                             }
                         }
                     }
