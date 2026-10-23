@@ -1,0 +1,768 @@
+package dev.scriptor.kengine
+
+import dev.scriptor.kengine.math.*
+import java.nio.ByteBuffer
+import java.nio.IntBuffer
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import kotlin.math.absoluteValue
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.sign
+import kotlin.reflect.KClass
+
+private fun triangle(
+    x0: Int,
+    y0: Int,
+    x1: Int,
+    y1: Int,
+    x2: Int,
+    y2: Int,
+    width: Int,
+    height: Int,
+    clipMinX: Int = 0,
+    clipMinY: Int = 0,
+    clipMaxX: Int = width - 1,
+    clipMaxY: Int = height - 1,
+    plot: (x: Int, y: Int, b0: Float, b1: Float, b2: Float) -> Unit,
+) {
+    val minX = maxOf(minOf(x0, x1, x2), 0, clipMinX)
+    val minY = maxOf(minOf(y0, y1, y2), 0, clipMinY)
+    val maxX = minOf(maxOf(x0, x1, x2), width - 1, clipMaxX)
+    val maxY = minOf(maxOf(y0, y1, y2), height - 1, clipMaxY)
+
+    if (minX > maxX || minY > maxY) return
+
+    fun edge(ax: Int, ay: Int, bx: Int, by: Int, px: Int, py: Int): Long {
+        return (bx.toLong() - ax.toLong()) * (py.toLong() - ay.toLong()) -
+                (by.toLong() - ay.toLong()) * (px.toLong() - ax.toLong())
+    }
+
+    val area = edge(x0, y0, x1, y1, x2, y2)
+    if (area == 0L) return
+
+    val invArea = 1.0f / area.absoluteValue.toFloat()
+
+    val sign = area.sign.toLong()
+
+    val dx0 = -(y2 - y1).toLong() * sign
+    val dy0 = (x2 - x1).toLong() * sign
+
+    val dx1 = -(y0 - y2).toLong() * sign
+    val dy1 = (x0 - x2).toLong() * sign
+
+    val dx2 = -(y1 - y0).toLong() * sign
+    val dy2 = (x1 - x0).toLong() * sign
+
+    var row0 = edge(x1, y1, x2, y2, minX, minY) * sign
+    var row1 = edge(x2, y2, x0, y0, minX, minY) * sign
+    var row2 = edge(x0, y0, x1, y1, minX, minY) * sign
+
+    for (y in minY..maxY) {
+        var e0 = row0
+        var e1 = row1
+        var e2 = row2
+
+        for (x in minX..maxX) {
+            if (e0 >= 0L && e1 >= 0L && e2 >= 0L) {
+                plot(
+                    x,
+                    y,
+                    e0.toFloat() * invArea,
+                    e1.toFloat() * invArea,
+                    e2.toFloat() * invArea,
+                )
+            }
+
+            e0 += dx0
+            e1 += dx1
+            e2 += dx2
+        }
+
+        row0 += dy0
+        row1 += dy1
+        row2 += dy2
+    }
+}
+
+interface Surface {
+    val width: Int
+    val height: Int
+
+    operator fun get(index: Int): Int
+    operator fun set(index: Int, value: Int)
+}
+
+class RuntimeShaderContext(
+    private val uniformValues: Array<out Any>,
+    private val inputValues: Array<Any>,
+    private val outputValues: Array<Any>,
+) : ShaderContext {
+
+    override fun get(id: UniformId): Any {
+        return uniformValues[id.index]
+    }
+
+    override fun get(id: InputId): Any {
+        return inputValues[id.index]
+    }
+
+    override fun set(id: OutputId, value: Any) {
+        outputValues[id.index] = value
+    }
+}
+
+interface VertexFormat<T : Any> {
+
+    val type: KClass<T>
+    val size: Int
+
+    fun get(buffer: ByteBuffer, offset: Int): T
+
+    data object FLOAT : VertexFormat<Float> {
+        override val type: KClass<Float> = Float::class
+        override val size: Int = Float.SIZE_BYTES
+
+        override fun get(buffer: ByteBuffer, offset: Int): Float {
+            return buffer.getFloat(offset)
+        }
+    }
+
+    data object VEC2 : VertexFormat<Vec2fc> {
+        override val type: KClass<Vec2fc> = Vec2fc::class
+        override val size: Int = Vec2fc.SIZE_BYTES
+
+        override fun get(buffer: ByteBuffer, offset: Int): Vec2f {
+            return buffer.getVec2f(offset)
+        }
+    }
+
+    data object VEC3 : VertexFormat<Vec3fc> {
+        override val type: KClass<Vec3fc> = Vec3fc::class
+        override val size: Int = Vec3fc.SIZE_BYTES
+
+        override fun get(buffer: ByteBuffer, offset: Int): Vec3f {
+            return buffer.getVec3f(offset)
+        }
+    }
+
+    data object VEC4 : VertexFormat<Vec4fc> {
+        override val type: KClass<Vec4fc> = Vec4fc::class
+        override val size: Int = Vec4fc.SIZE_BYTES
+
+        override fun get(buffer: ByteBuffer, offset: Int): Vec4f {
+            return buffer.getVec4f(offset)
+        }
+    }
+}
+
+data class VertexAttribute<T : Any>(
+    val input: Input<T>,
+    val format: VertexFormat<T>,
+    val offset: Int,
+)
+
+data class VertexLayout(
+    val stride: Int,
+    val attributes: List<VertexAttribute<*>>,
+) {
+    init {
+        require(stride > 0)
+
+        for (attribute in attributes) {
+            require(attribute.offset >= 0)
+            require(attribute.offset + attribute.format.size <= stride)
+            require(attribute.input.type == attribute.format.type)
+        }
+    }
+
+    fun fetch(
+        buffer: ByteBuffer,
+        offset: Int,
+        inputs: Array<Any>,
+    ) {
+        for (attribute in attributes) {
+            inputs[attribute.input.id.index] = attribute.format.get(buffer, offset + attribute.offset)
+        }
+    }
+}
+
+data class ClipVertex(
+    val position: Vec4fc,
+    val varyings: Array<Any>,
+)
+
+data class ScreenVertex(
+    val x: Float,
+    val y: Float,
+    val depth: Float,
+    val invW: Float,
+    val varyings: Array<Any>,
+)
+
+data class RasterTriangle(
+    val v0: ScreenVertex,
+    val v1: ScreenVertex,
+    val v2: ScreenVertex,
+
+    val area: Float,
+
+    val minX: Int,
+    val minY: Int,
+    val maxX: Int,
+    val maxY: Int,
+)
+
+data class RasterFragment(
+    val x: Int,
+    val y: Int,
+    val depth: Float,
+    val b0: Float,
+    val b1: Float,
+    val b2: Float,
+    val invW0: Float,
+    val invW1: Float,
+    val invW2: Float,
+) {
+    fun perspectiveWeights(): Triple<Float, Float, Float> {
+        val w0 = b0 * invW0
+        val w1 = b1 * invW1
+        val w2 = b2 * invW2
+
+        val inv = 1.0f / (w0 + w1 + w2)
+
+        return Triple(w0 * inv, w1 * inv, w2 * inv)
+    }
+}
+
+class Rasterizer(
+    val tileSize: Int,
+) {
+    init {
+        require(tileSize > 0)
+    }
+
+    fun rasterize(
+        triangle: RasterTriangle,
+        clipMinX: Int,
+        clipMinY: Int,
+        clipMaxX: Int,
+        clipMaxY: Int,
+        emit: (RasterFragment) -> Unit,
+    ) {
+        val minX = maxOf(triangle.minX, clipMinX)
+        val minY = maxOf(triangle.minY, clipMinY)
+        val maxX = minOf(triangle.maxX, clipMaxX)
+        val maxY = minOf(triangle.maxY, clipMaxY)
+
+        if (minX > maxX || minY > maxY)
+            return
+
+        fun edge(
+            a: ScreenVertex,
+            b: ScreenVertex,
+            x: Float,
+            y: Float,
+        ): Float = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x)
+
+        fun isTopLeft(a: ScreenVertex, b: ScreenVertex): Boolean {
+            val dx = b.x - a.x
+            val dy = b.y - a.y
+            return dy < 0.0f || (dy == 0.0f && dx > 0.0f)
+        }
+
+        fun inside(value: Float, inclusive: Boolean): Boolean =
+            value > 0.0f || (value == 0.0f && inclusive)
+
+        val inclusive0 = isTopLeft(triangle.v1, triangle.v2)
+        val inclusive1 = isTopLeft(triangle.v2, triangle.v0)
+        val inclusive2 = isTopLeft(triangle.v0, triangle.v1)
+
+        val inverseArea = 1.0f / triangle.area
+
+        for (y in minY..maxY) {
+            val py = y + 0.5f
+
+            for (x in minX..maxX) {
+                val px = x + 0.5f
+
+                val e0 = edge(triangle.v1, triangle.v2, px, py)
+                val e1 = edge(triangle.v2, triangle.v0, px, py)
+                val e2 = edge(triangle.v0, triangle.v1, px, py)
+
+                if (
+                    inside(e0, inclusive0) &&
+                    inside(e1, inclusive1) &&
+                    inside(e2, inclusive2)
+                ) {
+                    val b0 = e0 * inverseArea
+                    val b1 = e1 * inverseArea
+                    val b2 = e2 * inverseArea
+
+                    val depth = (b0 * triangle.v0.depth + b1 * triangle.v1.depth + b2 * triangle.v2.depth)
+                        .coerceIn(0.0f, 1.0f)
+
+                    emit(
+                        RasterFragment(
+                            x, y,
+                            depth,
+                            b0, b1, b2,
+                            triangle.v0.invW,
+                            triangle.v1.invW,
+                            triangle.v2.invW,
+                        )
+                    )
+                }
+            }
+        }
+    }
+}
+
+interface Interpolator<T : Any> {
+    operator fun invoke(a: T, b: T, t: Float): T
+    operator fun invoke(a: T, wa: Float, b: T, wb: Float, c: T, wc: Float): T
+}
+
+data class Varying<T : Any>(
+    val vertexOutput: Output<T>,
+    val fragmentInput: Input<T>,
+    val interpolator: Interpolator<T>,
+)
+
+class GraphicsPipeline(
+    val vertexShader: VertexShader,
+    val fragmentShader: FragmentShader,
+    val vertexLayout: VertexLayout,
+    val rasterizer: Rasterizer,
+    val executor: ExecutorService = Executors.newFixedThreadPool(
+        Runtime.getRuntime().availableProcessors().coerceAtLeast(1),
+        Thread.ofPlatform().daemon().factory(),
+    ),
+) {
+    private val varyings: List<Varying<*>>
+
+    init {
+        val vertexOutputs = vertexShader.shader.outputs
+            .filter { it.id != vertexShader.position.id }
+            .associateBy { it.location }
+
+        varyings = fragmentShader.shader.inputs.map { fragmentInput ->
+            val vertexOutput = vertexOutputs[fragmentInput.location]
+                ?: error("missing vertex output for fragment input location ${fragmentInput.location}")
+
+            require(vertexOutput.type == fragmentInput.type)
+
+            when (val type = vertexOutput.type) {
+                Float::class -> Varying(
+                    vertexOutput as Output<Float>,
+                    fragmentInput as Input<Float>,
+                    object : Interpolator<Float> {
+                        override fun invoke(a: Float, b: Float, t: Float): Float {
+                            return a + (b - a) * t
+                        }
+
+                        override fun invoke(a: Float, wa: Float, b: Float, wb: Float, c: Float, wc: Float): Float {
+                            return a * wa + b * wb + c * wc
+                        }
+                    }
+                )
+
+                Vec2fc::class -> Varying(
+                    vertexOutput as Output<Vec2fc>,
+                    fragmentInput as Input<Vec2fc>,
+                    object : Interpolator<Vec2fc> {
+                        override fun invoke(a: Vec2fc, b: Vec2fc, t: Float): Vec2fc {
+                            return Vec2f(a).fma(b - a, t)
+                        }
+
+                        override fun invoke(
+                            a: Vec2fc,
+                            wa: Float,
+                            b: Vec2fc,
+                            wb: Float,
+                            c: Vec2fc,
+                            wc: Float
+                        ): Vec2fc {
+                            return Vec2f()
+                                .fma(a, wa)
+                                .fma(b, wb)
+                                .fma(c, wc)
+                        }
+                    }
+                )
+
+                Vec3fc::class -> Varying(
+                    vertexOutput as Output<Vec3fc>,
+                    fragmentInput as Input<Vec3fc>,
+                    object : Interpolator<Vec3fc> {
+                        override fun invoke(a: Vec3fc, b: Vec3fc, t: Float): Vec3fc {
+                            return Vec3f(a).fma(b - a, t)
+                        }
+
+                        override fun invoke(
+                            a: Vec3fc,
+                            wa: Float,
+                            b: Vec3fc,
+                            wb: Float,
+                            c: Vec3fc,
+                            wc: Float
+                        ): Vec3fc {
+                            return Vec3f()
+                                .fma(a, wa)
+                                .fma(b, wb)
+                                .fma(c, wc)
+                        }
+                    }
+                )
+
+                Vec4fc::class -> Varying(
+                    vertexOutput as Output<Vec4fc>,
+                    fragmentInput as Input<Vec4fc>,
+                    object : Interpolator<Vec4fc> {
+                        override fun invoke(a: Vec4fc, b: Vec4fc, t: Float): Vec4fc {
+                            return Vec4f(a).fma(b - a, t)
+                        }
+
+                        override fun invoke(
+                            a: Vec4fc,
+                            wa: Float,
+                            b: Vec4fc,
+                            wb: Float,
+                            c: Vec4fc,
+                            wc: Float
+                        ): Vec4fc {
+                            return Vec4f()
+                                .fma(a, wa)
+                                .fma(b, wb)
+                                .fma(c, wc)
+                        }
+                    }
+                )
+
+                else -> error("unsupported type $type")
+            }
+        }
+    }
+
+    operator fun invoke(
+        surface: Surface,
+        mesh: Mesh,
+        uniforms: Array<out Any> = emptyArray(),
+    ) {
+        invoke(
+            surface,
+            mesh.vertexBuffer,
+            mesh.indexBuffer,
+            0,
+            mesh.count,
+            uniforms,
+        )
+    }
+
+    operator fun invoke(
+        surface: Surface,
+        vertexBuffer: ByteBuffer,
+        indexBuffer: IntBuffer,
+        first: Int,
+        count: Int,
+        uniforms: Array<out Any> = emptyArray(),
+    ) {
+        val vi: Array<Any> = Array(vertexShader.shader.inputs.size) {}
+        val vo: Array<Any> = Array(vertexShader.shader.outputs.size) {}
+        val vc = RuntimeShaderContext(uniforms, vi, vo)
+
+        val vertexCount = vertexBuffer.remaining() / vertexLayout.stride
+        val vso: Array<Array<Any>> = Array(vertexCount) { Array(vertexShader.shader.outputs.size) {} }
+
+        for (i in 0 until vertexCount) {
+            vi.fill(Unit)
+            vo.fill(Unit)
+
+            vertexLayout.fetch(vertexBuffer, vertexBuffer.position() + i * vertexLayout.stride, vi)
+
+            context(vc) { vertexShader.shader.main() }
+
+            vo.copyInto(vso[i])
+        }
+
+        val tilesX = (surface.width + rasterizer.tileSize - 1) / rasterizer.tileSize
+        val tilesY = (surface.height + rasterizer.tileSize - 1) / rasterizer.tileSize
+
+        val bins = Array(tilesX * tilesY) { mutableListOf<RasterTriangle>() }
+
+        for (index in first until first + count step 3) {
+            val i0 = indexBuffer.get(index)
+            val i1 = indexBuffer.get(index + 1)
+            val i2 = indexBuffer.get(index + 2)
+
+            val triangle = clipVertexTriangle(
+                vso[i0],
+                vso[i1],
+                vso[i2],
+            )
+
+            if (triangle.size < 3)
+                continue
+
+            for (i in 1 until triangle.lastIndex) {
+                val prepared = prepareTriangle(
+                    triangle[0],
+                    triangle[i],
+                    triangle[i + 1],
+                    surface.width,
+                    surface.height,
+                ) ?: continue
+
+                val tx0 = prepared.minX / rasterizer.tileSize
+                val ty0 = prepared.minY / rasterizer.tileSize
+                val tx1 = prepared.maxX / rasterizer.tileSize
+                val ty1 = prepared.maxY / rasterizer.tileSize
+
+                for (ty in ty0..ty1) {
+                    for (tx in tx0..tx1) {
+                        bins[tx + ty * tilesX] += prepared
+                    }
+                }
+            }
+        }
+
+        val tasks = mutableListOf<Callable<Unit>>()
+
+        for (ty in 0 until tilesY) {
+            for (tx in 0 until tilesX) {
+                val bin = bins[tx + ty * tilesX]
+                if (bin.isEmpty()) {
+                    continue
+                }
+
+                val tileMinX = tx * rasterizer.tileSize
+                val tileMinY = ty * rasterizer.tileSize
+                val tileMaxX = minOf(tileMinX + rasterizer.tileSize - 1, surface.width - 1)
+                val tileMaxY = minOf(tileMinY + rasterizer.tileSize - 1, surface.height - 1)
+
+                tasks += Callable {
+                    val fi: Array<Any> = Array(fragmentShader.shader.inputs.size) {}
+                    val fo: Array<Any> = Array(fragmentShader.shader.outputs.size) {}
+                    val fc = RuntimeShaderContext(uniforms, fi, fo)
+
+                    for (triangle in bin) {
+                        rasterizer.rasterize(
+                            triangle,
+                            tileMinX,
+                            tileMinY,
+                            tileMaxX,
+                            tileMaxY,
+                        ) { fragment ->
+                            val index = fragment.x + fragment.y * surface.width
+
+                            val z = fragment.depth.coerceIn(0.0f, 1.0f)
+
+                            val depth = (z * 255.999f).toInt() and 0xff
+                            val depthBuffer = (surface[index] ushr 24) and 0xff
+
+                            if (depth < depthBuffer) {
+                                val weights = fragment.perspectiveWeights()
+
+                                fi.fill(Unit)
+                                fo.fill(Unit)
+
+                                for (varyingIndex in varyings.indices) {
+                                    val varying = varyings[varyingIndex]
+
+                                    fi[varying.fragmentInput.id.index] =
+                                        (varying.interpolator as Interpolator<Any>)(
+                                            triangle.v0.varyings[varyingIndex],
+                                            weights.first,
+                                            triangle.v1.varyings[varyingIndex],
+                                            weights.second,
+                                            triangle.v2.varyings[varyingIndex],
+                                            weights.third,
+                                        )
+                                }
+
+                                context(fc) {
+                                    fragmentShader.shader.main()
+                                }
+
+                                val color = fo[fragmentShader.color.id.index] as? Vec4fc
+                                    ?: error("no fragment shader output")
+
+                                val r = (color.x.coerceIn(0.0f, 1.0f) * 255.999f).toInt() and 0xff
+                                val g = (color.y.coerceIn(0.0f, 1.0f) * 255.999f).toInt() and 0xff
+                                val b = (color.z.coerceIn(0.0f, 1.0f) * 255.999f).toInt() and 0xff
+
+                                surface[index] = (depth shl 24) or (r shl 16) or (g shl 8) or b
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        for (future in executor.invokeAll(tasks)) {
+            future.get()
+        }
+    }
+
+    private fun clipVertexTriangle(
+        v0: Array<Any>,
+        v1: Array<Any>,
+        v2: Array<Any>,
+    ): List<ClipVertex> {
+        fun toClipVertex(outputs: Array<Any>): ClipVertex {
+            val position = outputs[vertexShader.position.id.index] as? Vec4fc
+                ?: error("Vertex shader did not write a valid clip-space position")
+
+            val values = Array(varyings.size) { index ->
+                val outputId = varyings[index].vertexOutput.id.index
+                outputs[outputId]
+            }
+
+            return ClipVertex(position, values)
+        }
+
+        var polygon = listOf(
+            toClipVertex(v0),
+            toClipVertex(v1),
+            toClipVertex(v2),
+        )
+
+        // OpenGL-style homogeneous clip volume:
+        // -w <= x <= w, -w <= y <= w, -w <= z <= w.
+        val planes: List<(Vec4fc) -> Float> = listOf(
+            { p -> p.x + p.w }, // left
+            { p -> p.w - p.x }, // right
+            { p -> p.y + p.w }, // bottom
+            { p -> p.w - p.y }, // top
+            { p -> p.z + p.w }, // near
+            { p -> p.w - p.z }, // far
+        )
+
+        for (distance in planes) {
+            if (polygon.isEmpty()) break
+
+            val output = ArrayList<ClipVertex>(polygon.size + 1)
+
+            var previous = polygon.last()
+            var previousDistance = distance(previous.position)
+
+            for (current in polygon) {
+                val currentDistance = distance(current.position)
+
+                val previousInside = previousDistance >= 0.0f
+                val currentInside = currentDistance >= 0.0f
+
+                if (previousInside != currentInside) {
+                    val denominator = previousDistance - currentDistance
+
+                    if (denominator != 0.0f) {
+                        val t = (previousDistance / denominator).coerceIn(0.0f, 1.0f)
+
+                        output += interpolateClipVertex(previous, current, t)
+                    }
+                }
+
+                if (currentInside) {
+                    output += current
+                }
+
+                previous = current
+                previousDistance = currentDistance
+            }
+
+            polygon = output
+        }
+
+        return polygon
+    }
+
+    private fun interpolateClipVertex(
+        a: ClipVertex,
+        b: ClipVertex,
+        t: Float,
+    ): ClipVertex {
+        val pa = a.position
+        val pb = b.position
+
+        val position = pa + (pb - pa) * t
+
+        val values = Array(varyings.size) { index ->
+            (varyings[index].interpolator as Interpolator<Any>)(
+                a.varyings[index],
+                b.varyings[index],
+                t,
+            )
+        }
+
+        return ClipVertex(position, values)
+    }
+
+    private fun prepareTriangle(
+        v0: ClipVertex,
+        v1: ClipVertex,
+        v2: ClipVertex,
+        width: Int,
+        height: Int,
+    ): RasterTriangle? {
+        fun project(vertex: ClipVertex): ScreenVertex? {
+            if (!vertex.position.isFinite() || vertex.position.w <= 0.0f)
+                return null
+
+            val invW = 1.0f / vertex.position.w
+            val ndc = vertex.position.xyz * invW
+
+            val x = (ndc.x * 0.5f + 0.5f) * width
+            val y = (0.5f - ndc.y * 0.5f) * height
+            val depth = ndc.z * 0.5f + 0.5f
+
+            if (!x.isFinite() || !y.isFinite() || !depth.isFinite() || !invW.isFinite())
+                return null
+
+            return ScreenVertex(
+                x, y,
+                depth,
+                invW,
+                vertex.varyings,
+            )
+        }
+
+        fun orient(a: ScreenVertex, b: ScreenVertex, c: ScreenVertex): Float =
+            (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+
+        var p0 = project(v0) ?: return null
+        var p1 = project(v1) ?: return null
+        var p2 = project(v2) ?: return null
+
+        var area = orient(p0, p1, p2)
+
+        if (area == 0.0f || !area.isFinite())
+            return null
+
+        if (area < 0.0f) {
+            val tmp = p1
+            p1 = p2
+            p2 = tmp
+            area = -area
+        }
+
+        val minScreenX = minOf(p0.x, p1.x, p2.x)
+        val minScreenY = minOf(p0.y, p1.y, p2.y)
+        val maxScreenX = maxOf(p0.x, p1.x, p2.x)
+        val maxScreenY = maxOf(p0.y, p1.y, p2.y)
+
+        val minX = maxOf(0, ceil(minScreenX - 0.5f).toInt())
+        val minY = maxOf(0, ceil(minScreenY - 0.5f).toInt())
+        val maxX = minOf(width - 1, floor(maxScreenX - 0.5f).toInt())
+        val maxY = minOf(height - 1, floor(maxScreenY - 0.5f).toInt())
+
+        if (minX > maxX || minY > maxY)
+            return null
+
+        return RasterTriangle(
+            p0, p1, p2,
+            area,
+            minX, minY, maxX, maxY,
+        )
+    }
+}

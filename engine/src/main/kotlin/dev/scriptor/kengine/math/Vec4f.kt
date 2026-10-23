@@ -1,4 +1,4 @@
-package dev.scriptor.kengine
+package dev.scriptor.kengine.math
 
 import java.nio.ByteBuffer
 import kotlin.math.sqrt
@@ -20,6 +20,15 @@ interface Vec4fc {
     val length
         get() = sqrt(x * x + y * y + z * z + w * w)
 
+    operator fun get(i: Int): Float = when (i) {
+        0 -> x
+        1 -> y
+        2 -> z
+        3 -> w
+        else -> error("index $i out of bounds")
+    }
+
+
     operator fun plus(v: Vec4fc): Vec4f = Vec4f(x + v.x, y + v.y, z + v.z, w + v.w)
     operator fun minus(v: Vec4fc): Vec4f = Vec4f(x - v.x, y - v.y, z - v.z, w - v.w)
     operator fun times(t: Float): Vec4f = Vec4f(x * t, y * t, z * t, w * t)
@@ -27,6 +36,8 @@ interface Vec4fc {
     operator fun rem(t: Float): Vec4f = Vec4f(x % t, y % t, z % t, w % t)
 
     infix fun dot(v: Vec4fc): Float = x * v.x + y * v.y + z * v.z + w * v.w
+
+    fun isFinite(): Boolean = x.isFinite() && y.isFinite() && z.isFinite() && w.isFinite()
 }
 
 data class Vec4f(
@@ -66,6 +77,15 @@ data class Vec4f(
     constructor(s: Float) : this(s, s, s, s)
     constructor(xyz: Vec3fc, w: Float) : this(xyz.x, xyz.y, xyz.z, w)
     constructor(xy: Vec2fc, z: Float, w: Float) : this(xy.x, xy.y, z, w)
+    constructor(v: Vec4fc) : this(v.x, v.y, v.z, v.w)
+
+    operator fun set(i: Int, value: Float) = when (i) {
+        0 -> x = value
+        1 -> y = value
+        2 -> z = value
+        3 -> w = value
+        else -> error("index $i out of bounds")
+    }
 
     operator fun plusAssign(v: Vec4fc) {
         x += v.x
@@ -102,7 +122,7 @@ data class Vec4f(
         w %= t
     }
 
-    fun timesPlusAssign(v: Vec4fc, t: Float): Vec4f {
+    fun fma(v: Vec4fc, t: Float): Vec4f {
         x += v.x * t
         y += v.y * t
         z += v.z * t

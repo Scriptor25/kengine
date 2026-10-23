@@ -1,4 +1,4 @@
-package dev.scriptor.kengine
+package dev.scriptor.kengine.math
 
 import java.nio.ByteBuffer
 import kotlin.math.sqrt
@@ -17,6 +17,13 @@ interface Vec3fc {
 
     val length
         get() = sqrt(x * x + y * y + z * z)
+
+    operator fun get(i: Int): Float = when (i) {
+        0 -> x
+        1 -> y
+        2 -> z
+        else -> error("index $i out of bounds")
+    }
 
     operator fun plus(v: Vec3fc): Vec3f = Vec3f(x + v.x, y + v.y, z + v.z)
     operator fun minus(v: Vec3fc): Vec3f = Vec3f(x - v.x, y - v.y, z - v.z)
@@ -49,6 +56,7 @@ data class Vec3f(
     constructor() : this(0.0f, 0.0f, 0.0f)
     constructor(s: Float) : this(s, s, s)
     constructor(xy: Vec2fc, z: Float) : this(xy.x, xy.y, z)
+    constructor(v: Vec3fc) : this(v.x, v.y, v.z)
 
     operator fun plusAssign(v: Vec3fc) {
         x += v.x
@@ -80,7 +88,7 @@ data class Vec3f(
         z %= t
     }
 
-    fun timesPlusAssign(v: Vec3fc, t: Float): Vec3f {
+    fun fma(v: Vec3fc, t: Float): Vec3f {
         x += v.x * t
         y += v.y * t
         z += v.z * t

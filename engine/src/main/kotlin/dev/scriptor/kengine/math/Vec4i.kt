@@ -1,4 +1,4 @@
-package dev.scriptor.kengine
+package dev.scriptor.kengine.math
 
 import java.nio.ByteBuffer
 import kotlin.math.sqrt
@@ -65,6 +65,7 @@ data class Vec4i(
     constructor() : this(0, 0, 0, 0)
     constructor(s: Int) : this(s, s, s, s)
     constructor(xyz: Vec3ic, w: Int) : this(xyz.x, xyz.y, xyz.z, w)
+    constructor(v: Vec4ic) : this(v.x, v.y, v.z, v.w)
 
     operator fun plusAssign(v: Vec4ic) {
         x += v.x
@@ -101,7 +102,7 @@ data class Vec4i(
         w %= t
     }
 
-    fun timesPlusAssign(v: Vec4ic, t: Int): Vec4i {
+    fun fma(v: Vec4ic, t: Int): Vec4i {
         x += v.x * t
         y += v.y * t
         z += v.z * t
