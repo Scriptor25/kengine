@@ -12,9 +12,9 @@ import java.awt.image.DataBufferInt
 import java.nio.ByteBuffer
 import java.nio.IntBuffer
 import java.util.*
+import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.Future
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.math.absoluteValue
@@ -62,21 +62,26 @@ fun triangle(
     p2y: Int,
     width: Int,
     height: Int,
+    clipMinX: Int = 0,
+    clipMinY: Int = 0,
+    clipMaxX: Int = width - 1,
+    clipMaxY: Int = height - 1,
     plot: (x: Int, y: Int, b0: Float, b1: Float, b2: Float) -> Unit,
 ) {
-    val xMin = maxOf(minOf(p0x, p1x, p2x), 0)
-    val yMin = maxOf(minOf(p0y, p1y, p2y), 0)
-    val xMax = minOf(maxOf(p0x, p1x, p2x), width - 1)
-    val yMax = minOf(maxOf(p0y, p1y, p2y), height - 1)
+    val xMin = maxOf(minOf(p0x, p1x, p2x), 0, clipMinX)
+    val yMin = maxOf(minOf(p0y, p1y, p2y), 0, clipMinY)
+    val xMax = minOf(maxOf(p0x, p1x, p2x), width - 1, clipMaxX)
+    val yMax = minOf(maxOf(p0y, p1y, p2y), height - 1, clipMaxY)
 
     if (xMin > xMax || yMin > yMax) return
 
-    fun edge(ax: Int, ay: Int, bx: Int, by: Int, px: Int, py: Int): Int {
-        return (bx - ax) * (py - ay) - (by - ay) * (px - ax)
+    fun edge(ax: Int, ay: Int, bx: Int, by: Int, px: Int, py: Int): Long {
+        return (bx.toLong() - ax.toLong()) * (py.toLong() - ay.toLong()) -
+                (by.toLong() - ay.toLong()) * (px.toLong() - ax.toLong())
     }
 
     val area = edge(p0x, p0y, p1x, p1y, p2x, p2y)
-    if (area == 0) return
+    if (area == 0L) return
 
     val invArea = 1.0f / area.absoluteValue.toFloat()
 
@@ -134,6 +139,32 @@ interface FragmentShaderOutput {
     val color: Vec4fc
 }
 
+data class RasterTriangle<VSO : VertexShaderOutput>(
+    val v0: VSO,
+    val v1: VSO,
+    val v2: VSO,
+
+    val x0: Int,
+    val y0: Int,
+    val x1: Int,
+    val y1: Int,
+    val x2: Int,
+    val y2: Int,
+
+    val z0: Float,
+    val z1: Float,
+    val z2: Float,
+
+    val invW0: Float,
+    val invW1: Float,
+    val invW2: Float,
+
+    val minX: Int,
+    val minY: Int,
+    val maxX: Int,
+    val maxY: Int,
+)
+
 interface Surface {
     val width: Int
     val height: Int
@@ -149,6 +180,7 @@ interface Pipeline<
         FSO : FragmentShaderOutput> {
 
     val stride: Int
+    val tileSize: Int
     val executor: ExecutorService
 
     fun allocateVSI(count: Int): Array<VSI?>
@@ -181,73 +213,140 @@ interface Pipeline<
         first: Int,
         count: Int,
     ) {
+        if (surface.width <= 0 || surface.height <= 0 || count <= 0)
+            return
+
         val vertexCount = vertexBuffer.remaining() / stride
+        val vertexBase = vertexBuffer.position()
 
-        val vertices = arrayOfNulls<Future<VSO>>(vertexCount)
+        val vso = allocateVSO(vertexCount)
 
-        for (index in vertices.indices) {
-            vertices[index] = executor.submit<VSO> {
-                val vsi = invoke(vertexBuffer, index * stride)
-                invoke(vsi)
-            }
+        for (index in vso.indices) {
+            val vsi = invoke(vertexBuffer, vertexBase + index * stride)
+            vso[index] = invoke(vsi)
         }
 
-        val fragments = mutableListOf<Future<*>>()
+        val tilesX = (surface.width + tileSize - 1) / tileSize
+        val tilesY = (surface.height + tileSize - 1) / tileSize
 
-        for (index in (first until first + count).step(3)) {
+        val bins = Array(tilesX * tilesY) { mutableListOf<RasterTriangle<VSO>>() }
+
+        for (index in first until first + count step 3) {
             val i0 = indexBuffer.get(index)
             val i1 = indexBuffer.get(index + 1)
             val i2 = indexBuffer.get(index + 2)
 
-            val vso0 = vertices[i0]!!.get()
-            val vso1 = vertices[i1]!!.get()
-            val vso2 = vertices[i2]!!.get()
+            val v0 = vso[i0]!!
+            val v1 = vso[i1]!!
+            val v2 = vso[i2]!!
 
-            val ndc0 = Vec3f(0.5f).timesPlusAssign(vso0.position.xyz, 0.5f / vso0.position.w)
-            val ndc1 = Vec3f(0.5f).timesPlusAssign(vso1.position.xyz, 0.5f / vso1.position.w)
-            val ndc2 = Vec3f(0.5f).timesPlusAssign(vso2.position.xyz, 0.5f / vso2.position.w)
+            val invW0 = 1.0f / v0.position.w
+            val invW1 = 1.0f / v1.position.w
+            val invW2 = 1.0f / v2.position.w
 
-            val p0x = (ndc0.x * (surface.width - 1).toFloat()).toInt()
-            val p0y = ((1.0f - ndc0.y) * (surface.height - 1).toFloat()).toInt()
-            val p1x = (ndc1.x * (surface.width - 1).toFloat()).toInt()
-            val p1y = ((1.0f - ndc1.y) * (surface.height - 1).toFloat()).toInt()
-            val p2x = (ndc2.x * (surface.width - 1).toFloat()).toInt()
-            val p2y = ((1.0f - ndc2.y) * (surface.height - 1).toFloat()).toInt()
+            val ndc0 = Vec3f(0.5f).timesPlusAssign(v0.position.xyz, 0.5f * invW0)
+            val ndc1 = Vec3f(0.5f).timesPlusAssign(v1.position.xyz, 0.5f * invW1)
+            val ndc2 = Vec3f(0.5f).timesPlusAssign(v2.position.xyz, 0.5f * invW2)
 
-            triangle(
-                p0x, p0y,
-                p1x, p1y,
-                p2x, p2y,
-                surface.width, surface.height,
-            ) { x, y, b0, b1, b2 ->
-                val index = x + y * surface.width
+            val x0 = (ndc0.x * (surface.width - 1).toFloat()).toInt()
+            val y0 = ((1.0f - ndc0.y) * (surface.height - 1).toFloat()).toInt()
+            val x1 = (ndc1.x * (surface.width - 1).toFloat()).toInt()
+            val y1 = ((1.0f - ndc1.y) * (surface.height - 1).toFloat()).toInt()
+            val x2 = (ndc2.x * (surface.width - 1).toFloat()).toInt()
+            val y2 = ((1.0f - ndc2.y) * (surface.height - 1).toFloat()).toInt()
 
-                val z = (ndc0.z * b0 + ndc1.z * b1 + ndc2.z * b2).coerceIn(0.0f, 1.0f)
+            val minX = maxOf(minOf(x0, x1, x2), 0)
+            val minY = maxOf(minOf(y0, y1, y2), 0)
+            val maxX = minOf(maxOf(x0, x1, x2), surface.width - 1)
+            val maxY = minOf(maxOf(y0, y1, y2), surface.height - 1)
 
-                val depth = (z * 255.999f).toInt() and 0xff
-                val depthBuffer = (surface[index] ushr 24) and 0xff
+            if (minX > maxX || minY > maxY) {
+                continue
+            }
 
-                if (depth < depthBuffer) {
-                    fragments += executor.submit {
-                        val fsi = invoke(
-                            vso0, vso1, vso2,
-                            b0, b1, b2,
-                        )
+            val tri = RasterTriangle(
+                v0, v1, v2,
+                x0, y0, x1, y1, x2, y2,
+                ndc0.z, ndc1.z, ndc2.z,
+                invW0, invW1, invW2,
+                minX, minY, maxX, maxY,
+            )
 
-                        val fso = invoke(fsi)
+            val tx0 = minX / tileSize
+            val ty0 = minY / tileSize
+            val tx1 = maxX / tileSize
+            val ty1 = maxY / tileSize
 
-                        val r = (fso.color.x * 255.999f).toInt() and 0xff
-                        val g = (fso.color.y * 255.999f).toInt() and 0xff
-                        val b = (fso.color.z * 255.999f).toInt() and 0xff
+            for (ty in ty0..ty1) {
+                for (tx in tx0..tx1) {
+                    bins[tx + ty * tilesX] += tri
+                }
+            }
+        }
 
-                        surface[index] = (depth shl 24) or (r shl 16) or (g shl 8) or b
+        val tasks = mutableListOf<Callable<Unit>>()
+
+        for (ty in 0 until tilesY) {
+            for (tx in 0 until tilesX) {
+                val bin = bins[tx + ty * tilesX]
+                if (bin.isEmpty()) {
+                    continue
+                }
+
+                val tileMinX = tx * tileSize
+                val tileMinY = ty * tileSize
+                val tileMaxX = minOf(tileMinX + tileSize - 1, surface.width - 1)
+                val tileMaxY = minOf(tileMinY + tileSize - 1, surface.height - 1)
+
+                tasks += Callable {
+                    for (tri in bin) {
+                        triangle(
+                            tri.x0, tri.y0,
+                            tri.x1, tri.y1,
+                            tri.x2, tri.y2,
+                            surface.width, surface.height,
+                            tileMinX, tileMinY,
+                            tileMaxX, tileMaxY,
+                        ) { x, y, b0, b1, b2 ->
+                            val index = x + y * surface.width
+
+                            val z = (tri.z0 * b0 + tri.z1 * b1 + tri.z2 * b2).coerceIn(0.0f, 1.0f)
+
+                            val depth = (z * 255.999f).toInt() and 0xff
+                            val depthBuffer = (surface[index] ushr 24) and 0xff
+
+                            if (depth < depthBuffer) {
+                                val w0 = b0 * tri.invW0
+                                val w1 = b1 * tri.invW1
+                                val w2 = b2 * tri.invW2
+
+                                val invDenom = 1.0f / (w0 + w1 + w2)
+
+                                val pb0 = w0 * invDenom
+                                val pb1 = w1 * invDenom
+                                val pb2 = w2 * invDenom
+
+                                val fsi = invoke(
+                                    tri.v0, tri.v1, tri.v2,
+                                    pb0, pb1, pb2,
+                                )
+
+                                val fso = invoke(fsi)
+
+                                val r = (fso.color.x * 255.999f).toInt() and 0xff
+                                val g = (fso.color.y * 255.999f).toInt() and 0xff
+                                val b = (fso.color.z * 255.999f).toInt() and 0xff
+
+                                surface[index] = (depth shl 24) or (r shl 16) or (g shl 8) or b
+                            }
+                        }
                     }
                 }
             }
         }
 
-        for (fragment in fragments) {
-            fragment.get()
+        for (future in executor.invokeAll(tasks)) {
+            future.get()
         }
     }
 }
@@ -283,12 +382,13 @@ class DefaultPipeline : Pipeline<
         DefaultFragmentShaderInput,
         DefaultFragmentShaderOutput> {
 
+    override val tileSize: Int = 32
     override val stride: Int = Vec3fc.SIZE_BYTES * 2 + Vec2fc.SIZE_BYTES + Vec4fc.SIZE_BYTES
-
     override val executor: ExecutorService =
-        Executors.newFixedThreadPool(128) { runnable ->
-            Thread(runnable).apply { isDaemon = true }
-        }
+        Executors.newFixedThreadPool(
+            Runtime.getRuntime().availableProcessors().coerceAtLeast(1),
+            Thread.ofPlatform().daemon().factory(),
+        )
 
     override fun allocateVSI(count: Int): Array<DefaultVertexShaderInput?> = arrayOfNulls(count)
     override fun allocateVSO(count: Int): Array<DefaultVertexShaderOutput?> = arrayOfNulls(count)
@@ -345,6 +445,7 @@ class DefaultPipeline : Pipeline<
     }
 
     override fun invoke(data: DefaultFragmentShaderInput): DefaultFragmentShaderOutput {
+        // Vec4f(data.texture, 0.0f, 1.0f)
         return DefaultFragmentShaderOutput(data.color)
     }
 }
@@ -486,6 +587,8 @@ fun main() {
             val now = Clock.System.now()
             val delta = now - time
             time = now
+
+            println(delta)
 
             synchronized(Context) {
                 Context.allocate()

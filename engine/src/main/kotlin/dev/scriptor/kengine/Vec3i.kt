@@ -13,11 +13,10 @@ interface Vec3ic {
     val y: Int
     val z: Int
 
+    val xy: Vec2ic
+
     val length
         get() = sqrt((x * x + y * y + z * z).toFloat())
-
-    val xy: Vec2i
-        get() = Vec2i(x, y)
 
     operator fun plus(v: Vec3ic): Vec3i = Vec3i(x + v.x, y + v.y, z + v.z)
     operator fun minus(v: Vec3ic): Vec3i = Vec3i(x - v.x, y - v.y, z - v.z)
@@ -33,32 +32,23 @@ interface Vec3ic {
     )
 }
 
-class Vec3i
-internal constructor(val value: IntArray) : Vec3ic {
+data class Vec3i(
+    override var x: Int,
+    override var y: Int,
+    override var z: Int,
+) : Vec3ic {
 
-    override var x: Int
-        get() = value[0]
-        set(value) {
-            this.value[0] = value
+    override val xy: Vec2ic
+        get() = object : Vec2ic {
+            override val x: Int
+                get() = this@Vec3i.x
+            override val y: Int
+                get() = this@Vec3i.y
         }
-    override var y: Int
-        get() = value[1]
-        set(value) {
-            this.value[1] = value
-        }
-    override var z: Int
-        get() = value[2]
-        set(value) {
-            this.value[2] = value
-        }
-
-    override val xy: Vec2i
-        get() = Vec2i(value)
 
     constructor() : this(0, 0, 0)
     constructor(s: Int) : this(s, s, s)
     constructor(xy: Vec2ic, z: Int) : this(xy.x, xy.y, z)
-    constructor(x: Int, y: Int, z: Int) : this(intArrayOf(x, y, z))
 
     operator fun plusAssign(v: Vec3ic) {
         x += v.x

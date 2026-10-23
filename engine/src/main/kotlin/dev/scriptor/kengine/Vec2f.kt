@@ -25,23 +25,13 @@ interface Vec2fc {
     infix fun cross(v: Vec2fc): Float = x * v.y - y * v.x
 }
 
-class Vec2f
-internal constructor(val value: FloatArray) : Vec2fc {
+data class Vec2f(
+    override var x: Float,
+    override var y: Float,
+) : Vec2fc {
 
     constructor() : this(0.0f, 0.0f)
     constructor(s: Float) : this(s, s)
-    constructor(x: Float, y: Float) : this(floatArrayOf(x, y))
-
-    override var x: Float
-        get() = value[0]
-        set(value) {
-            this.value[0] = value
-        }
-    override var y: Float
-        get() = value[1]
-        set(value) {
-            this.value[1] = value
-        }
 
     operator fun plusAssign(v: Vec2fc) {
         x += v.x

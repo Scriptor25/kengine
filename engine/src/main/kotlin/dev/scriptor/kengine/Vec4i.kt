@@ -14,13 +14,11 @@ interface Vec4ic {
     val z: Int
     val w: Int
 
+    val xy: Vec2ic
+    val xyz: Vec3ic
+
     val length
         get() = sqrt((x * x + y * y + z * z + w * w).toFloat())
-
-    val xy: Vec2i
-        get() = Vec2i(x, y)
-    val xyz: Vec3i
-        get() = Vec3i(x, y, z)
 
     operator fun plus(v: Vec4ic): Vec4i = Vec4i(x + v.x, y + v.y, z + v.z, w + v.w)
     operator fun minus(v: Vec4ic): Vec4i = Vec4i(x - v.x, y - v.y, z - v.z, w - v.w)
@@ -31,39 +29,42 @@ interface Vec4ic {
     infix fun dot(v: Vec4ic): Int = x * v.x + y * v.y + z * v.z + w * v.w
 }
 
-class Vec4i
-internal constructor(val value: IntArray) : Vec4ic {
+data class Vec4i(
+    override var x: Int,
+    override var y: Int,
+    override var z: Int,
+    override var w: Int,
+) : Vec4ic {
 
-    override var x: Int
-        get() = value[0]
-        set(value) {
-            this.value[0] = value
-        }
-    override var y: Int
-        get() = value[1]
-        set(value) {
-            this.value[1] = value
-        }
-    override var z: Int
-        get() = value[2]
-        set(value) {
-            this.value[2] = value
-        }
-    override var w: Int
-        get() = value[3]
-        set(value) {
-            this.value[3] = value
+    override val xy: Vec2ic
+        get() = object : Vec2ic {
+            override val x: Int
+                get() = this@Vec4i.x
+            override val y: Int
+                get() = this@Vec4i.y
         }
 
-    override val xy: Vec2i
-        get() = Vec2i(value)
-    override val xyz: Vec3i
-        get() = Vec3i(value)
+    override val xyz: Vec3ic
+        get() = object : Vec3ic {
+            override val x: Int
+                get() = this@Vec4i.x
+            override val y: Int
+                get() = this@Vec4i.y
+            override val z: Int
+                get() = this@Vec4i.z
+
+            override val xy: Vec2ic
+                get() = object : Vec2ic {
+                    override val x: Int
+                        get() = this@Vec4i.x
+                    override val y: Int
+                        get() = this@Vec4i.y
+                }
+        }
 
     constructor() : this(0, 0, 0, 0)
     constructor(s: Int) : this(s, s, s, s)
     constructor(xyz: Vec3ic, w: Int) : this(xyz.x, xyz.y, xyz.z, w)
-    constructor(x: Int, y: Int, z: Int, w: Int) : this(intArrayOf(x, y, z, w))
 
     operator fun plusAssign(v: Vec4ic) {
         x += v.x

@@ -14,13 +14,11 @@ interface Vec4fc {
     val z: Float
     val w: Float
 
+    val xy: Vec2fc
+    val xyz: Vec3fc
+
     val length
         get() = sqrt(x * x + y * y + z * z + w * w)
-
-    val xy: Vec2f
-        get() = Vec2f(x, y)
-    val xyz: Vec3f
-        get() = Vec3f(x, y, z)
 
     operator fun plus(v: Vec4fc): Vec4f = Vec4f(x + v.x, y + v.y, z + v.z, w + v.w)
     operator fun minus(v: Vec4fc): Vec4f = Vec4f(x - v.x, y - v.y, z - v.z, w - v.w)
@@ -31,39 +29,43 @@ interface Vec4fc {
     infix fun dot(v: Vec4fc): Float = x * v.x + y * v.y + z * v.z + w * v.w
 }
 
-class Vec4f
-internal constructor(val value: FloatArray) : Vec4fc {
+data class Vec4f(
+    override var x: Float,
+    override var y: Float,
+    override var z: Float,
+    override var w: Float,
+) : Vec4fc {
 
-    override var x: Float
-        get() = value[0]
-        set(value) {
-            this.value[0] = value
-        }
-    override var y: Float
-        get() = value[1]
-        set(value) {
-            this.value[1] = value
-        }
-    override var z: Float
-        get() = value[2]
-        set(value) {
-            this.value[2] = value
-        }
-    override var w: Float
-        get() = value[3]
-        set(value) {
-            this.value[3] = value
+    override val xy: Vec2fc
+        get() = object : Vec2fc {
+            override val x: Float
+                get() = this@Vec4f.x
+            override val y: Float
+                get() = this@Vec4f.y
         }
 
-    override val xy: Vec2f
-        get() = Vec2f(value)
-    override val xyz: Vec3f
-        get() = Vec3f(value)
+    override val xyz: Vec3fc
+        get() = object : Vec3fc {
+            override val x: Float
+                get() = this@Vec4f.x
+            override val y: Float
+                get() = this@Vec4f.y
+            override val z: Float
+                get() = this@Vec4f.z
+
+            override val xy: Vec2fc
+                get() = object : Vec2fc {
+                    override val x: Float
+                        get() = this@Vec4f.x
+                    override val y: Float
+                        get() = this@Vec4f.y
+                }
+        }
 
     constructor() : this(0.0f, 0.0f, 0.0f, 0.0f)
     constructor(s: Float) : this(s, s, s, s)
     constructor(xyz: Vec3fc, w: Float) : this(xyz.x, xyz.y, xyz.z, w)
-    constructor(x: Float, y: Float, z: Float, w: Float) : this(floatArrayOf(x, y, z, w))
+    constructor(xy: Vec2fc, z: Float, w: Float) : this(xy.x, xy.y, z, w)
 
     operator fun plusAssign(v: Vec4fc) {
         x += v.x

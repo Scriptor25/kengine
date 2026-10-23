@@ -13,11 +13,10 @@ interface Vec3fc {
     val y: Float
     val z: Float
 
+    val xy: Vec2fc
+
     val length
         get() = sqrt(x * x + y * y + z * z)
-
-    val xy: Vec2f
-        get() = Vec2f(x, y)
 
     operator fun plus(v: Vec3fc): Vec3f = Vec3f(x + v.x, y + v.y, z + v.z)
     operator fun minus(v: Vec3fc): Vec3f = Vec3f(x - v.x, y - v.y, z - v.z)
@@ -33,32 +32,23 @@ interface Vec3fc {
     )
 }
 
-class Vec3f
-internal constructor(val value: FloatArray) : Vec3fc {
+data class Vec3f(
+    override var x: Float,
+    override var y: Float,
+    override var z: Float,
+) : Vec3fc {
 
-    override var x: Float
-        get() = value[0]
-        set(value) {
-            this.value[0] = value
+    override val xy: Vec2fc
+        get() = object : Vec2fc {
+            override val x: Float
+                get() = this@Vec3f.x
+            override val y: Float
+                get() = this@Vec3f.y
         }
-    override var y: Float
-        get() = value[1]
-        set(value) {
-            this.value[1] = value
-        }
-    override var z: Float
-        get() = value[2]
-        set(value) {
-            this.value[2] = value
-        }
-
-    override val xy: Vec2f
-        get() = Vec2f(value)
 
     constructor() : this(0.0f, 0.0f, 0.0f)
     constructor(s: Float) : this(s, s, s)
     constructor(xy: Vec2fc, z: Float) : this(xy.x, xy.y, z)
-    constructor(x: Float, y: Float, z: Float) : this(floatArrayOf(x, y, z))
 
     operator fun plusAssign(v: Vec3fc) {
         x += v.x

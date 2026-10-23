@@ -25,23 +25,13 @@ interface Vec2ic {
     infix fun cross(v: Vec2ic): Int = x * v.y - y * v.x
 }
 
-class Vec2i
-internal constructor(val value: IntArray) : Vec2ic {
+data class Vec2i(
+    override var x: Int,
+    override var y: Int,
+) : Vec2ic {
 
     constructor() : this(0, 0)
     constructor(s: Int) : this(s, s)
-    constructor(x: Int, y: Int) : this(intArrayOf(x, y))
-
-    override var x: Int
-        get() = value[0]
-        set(value) {
-            this.value[0] = value
-        }
-    override var y: Int
-        get() = value[1]
-        set(value) {
-            this.value[1] = value
-        }
 
     operator fun plusAssign(v: Vec2ic) {
         x += v.x
