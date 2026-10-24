@@ -21,7 +21,7 @@ object Context {
     @OptIn(ExperimentalAtomicApi::class)
     val running = AtomicBoolean(true)
 
-    const val SCALE = 4
+    const val SCALE = 2
 
     var width: Int = 0
     var height: Int = 0
