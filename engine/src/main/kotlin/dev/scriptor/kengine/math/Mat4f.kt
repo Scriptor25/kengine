@@ -34,8 +34,8 @@ interface Mat4fc {
         return o
     }
 
-    operator fun times(vec: Vec4fc): Vec4f {
-        val o = Vec4f()
+    operator fun times(vec: Vec4f): Vec4f {
+        val o = FloatArray(4)
 
         for (i in 0..3) {
             o[i] = 0.0f +
@@ -45,7 +45,7 @@ interface Mat4fc {
                     this[i, 3] * vec[3]
         }
 
-        return o
+        return Vec4f(o[0], o[1], o[2], o[3])
     }
 
     companion object {
@@ -158,9 +158,9 @@ interface Mat4fc {
         }
 
         fun lookAt(
-            eye: Vec3fc,
-            center: Vec3fc,
-            up: Vec3fc
+            eye: Vec3f,
+            center: Vec3f,
+            up: Vec3f,
         ): Mat4f {
             val fx = center[0] - eye[0]
             val fy = center[1] - eye[1]
@@ -201,9 +201,9 @@ interface Mat4fc {
         }
 
         fun trs(
-            translation: Vec3fc,
-            rotation: Vec3fc,
-            scale: Vec3fc
+            translation: Vec3f,
+            rotation: Vec3f,
+            scale: Vec3f,
         ): Mat4f {
             return translation(translation[0], translation[1], translation[2]) *
                     rotationZ(rotation[2]) *

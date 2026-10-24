@@ -1,6 +1,6 @@
 package dev.scriptor.kengine
 
-import dev.scriptor.kengine.math.Vec4fc
+import dev.scriptor.kengine.math.Vec4f
 import kotlin.reflect.KClass
 import kotlin.reflect.cast
 
@@ -154,12 +154,12 @@ fun shader(block: ShaderBuilder.() -> Unit): Shader {
 
 class VertexShader(
     val shader: Shader,
-    val position: Output<Vec4fc>,
+    val position: Output<Vec4f>,
 )
 
 class VertexShaderBuilder : ShaderBuilder() {
 
-    val position = output<Vec4fc>()
+    val position = output<Vec4f>()
 
     internal fun buildVertex(): VertexShader = VertexShader(
         build(),
@@ -173,12 +173,12 @@ fun vertexShader(block: VertexShaderBuilder.() -> Unit): VertexShader {
 
 class FragmentShader(
     val shader: Shader,
-    val color: Output<Vec4fc>,
+    val color: Output<Vec4f>,
 )
 
 class FragmentShaderBuilder : ShaderBuilder() {
 
-    val color = output<Vec4fc>()
+    val color = output<Vec4f>()
 
     internal fun buildFragment(): FragmentShader = FragmentShader(
         build(),

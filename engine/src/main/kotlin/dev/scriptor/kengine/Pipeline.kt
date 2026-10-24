@@ -5,85 +5,9 @@ import java.nio.ByteBuffer
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import kotlin.math.absoluteValue
 import kotlin.math.ceil
 import kotlin.math.floor
-import kotlin.math.sign
 import kotlin.reflect.KClass
-
-private fun triangle(
-    x0: Int,
-    y0: Int,
-    x1: Int,
-    y1: Int,
-    x2: Int,
-    y2: Int,
-    width: Int,
-    height: Int,
-    clipMinX: Int = 0,
-    clipMinY: Int = 0,
-    clipMaxX: Int = width - 1,
-    clipMaxY: Int = height - 1,
-    plot: (x: Int, y: Int, b0: Float, b1: Float, b2: Float) -> Unit,
-) {
-    val minX = maxOf(minOf(x0, x1, x2), 0, clipMinX)
-    val minY = maxOf(minOf(y0, y1, y2), 0, clipMinY)
-    val maxX = minOf(maxOf(x0, x1, x2), width - 1, clipMaxX)
-    val maxY = minOf(maxOf(y0, y1, y2), height - 1, clipMaxY)
-
-    if (minX > maxX || minY > maxY) return
-
-    fun edge(ax: Int, ay: Int, bx: Int, by: Int, px: Int, py: Int): Long {
-        return (bx.toLong() - ax.toLong()) * (py.toLong() - ay.toLong()) -
-                (by.toLong() - ay.toLong()) * (px.toLong() - ax.toLong())
-    }
-
-    val area = edge(x0, y0, x1, y1, x2, y2)
-    if (area == 0L) return
-
-    val invArea = 1.0f / area.absoluteValue.toFloat()
-
-    val sign = area.sign.toLong()
-
-    val dx0 = -(y2 - y1).toLong() * sign
-    val dy0 = (x2 - x1).toLong() * sign
-
-    val dx1 = -(y0 - y2).toLong() * sign
-    val dy1 = (x0 - x2).toLong() * sign
-
-    val dx2 = -(y1 - y0).toLong() * sign
-    val dy2 = (x1 - x0).toLong() * sign
-
-    var row0 = edge(x1, y1, x2, y2, minX, minY) * sign
-    var row1 = edge(x2, y2, x0, y0, minX, minY) * sign
-    var row2 = edge(x0, y0, x1, y1, minX, minY) * sign
-
-    for (y in minY..maxY) {
-        var e0 = row0
-        var e1 = row1
-        var e2 = row2
-
-        for (x in minX..maxX) {
-            if (e0 >= 0L && e1 >= 0L && e2 >= 0L) {
-                plot(
-                    x,
-                    y,
-                    e0.toFloat() * invArea,
-                    e1.toFloat() * invArea,
-                    e2.toFloat() * invArea,
-                )
-            }
-
-            e0 += dx0
-            e1 += dx1
-            e2 += dx2
-        }
-
-        row0 += dy0
-        row1 += dy1
-        row2 += dy2
-    }
-}
 
 interface Surface {
     val width: Int
@@ -131,27 +55,27 @@ interface VertexFormat<T : Any> {
         }
     }
 
-    data object VEC2 : VertexFormat<Vec2fc> {
-        override val type: KClass<Vec2fc> = Vec2fc::class
-        override val size: Int = Vec2fc.SIZE_BYTES
+    data object VEC2 : VertexFormat<Vec2f> {
+        override val type: KClass<Vec2f> = Vec2f::class
+        override val size: Int = Vec2f.SIZE_BYTES
 
         override fun get(buffer: ByteBuffer, offset: Int): Vec2f {
             return buffer.getVec2f(offset)
         }
     }
 
-    data object VEC3 : VertexFormat<Vec3fc> {
-        override val type: KClass<Vec3fc> = Vec3fc::class
-        override val size: Int = Vec3fc.SIZE_BYTES
+    data object VEC3 : VertexFormat<Vec3f> {
+        override val type: KClass<Vec3f> = Vec3f::class
+        override val size: Int = Vec3f.SIZE_BYTES
 
         override fun get(buffer: ByteBuffer, offset: Int): Vec3f {
             return buffer.getVec3f(offset)
         }
     }
 
-    data object VEC4 : VertexFormat<Vec4fc> {
-        override val type: KClass<Vec4fc> = Vec4fc::class
-        override val size: Int = Vec4fc.SIZE_BYTES
+    data object VEC4 : VertexFormat<Vec4f> {
+        override val type: KClass<Vec4f> = Vec4f::class
+        override val size: Int = Vec4f.SIZE_BYTES
 
         override fun get(buffer: ByteBuffer, offset: Int): Vec4f {
             return buffer.getVec4f(offset)
@@ -190,12 +114,12 @@ data class VertexLayout(
     }
 }
 
-data class ClipVertex(
-    val position: Vec4fc,
+class ClipVertex(
+    val position: Vec4f,
     val varyings: Array<Any>,
 )
 
-data class ScreenVertex(
+class ScreenVertex(
     val x: Float,
     val y: Float,
     val depth: Float,
@@ -370,74 +294,65 @@ class GraphicsPipeline(
                     }
                 )
 
-                Vec2fc::class -> Varying(
-                    vertexOutput as Output<Vec2fc>,
-                    fragmentInput as Input<Vec2fc>,
-                    object : Interpolator<Vec2fc> {
-                        override fun invoke(a: Vec2fc, b: Vec2fc, t: Float): Vec2fc {
-                            return Vec2f(a).fma(b - a, t)
+                Vec2f::class -> Varying(
+                    vertexOutput as Output<Vec2f>,
+                    fragmentInput as Input<Vec2f>,
+                    object : Interpolator<Vec2f> {
+                        override fun invoke(a: Vec2f, b: Vec2f, t: Float): Vec2f {
+                            return a + (b - a) * t
                         }
 
                         override fun invoke(
-                            a: Vec2fc,
+                            a: Vec2f,
                             wa: Float,
-                            b: Vec2fc,
+                            b: Vec2f,
                             wb: Float,
-                            c: Vec2fc,
+                            c: Vec2f,
                             wc: Float
-                        ): Vec2fc {
-                            return Vec2f()
-                                .fma(a, wa)
-                                .fma(b, wb)
-                                .fma(c, wc)
+                        ): Vec2f {
+                            return a * wa + b * wb + c * wc
                         }
                     }
                 )
 
-                Vec3fc::class -> Varying(
-                    vertexOutput as Output<Vec3fc>,
-                    fragmentInput as Input<Vec3fc>,
-                    object : Interpolator<Vec3fc> {
-                        override fun invoke(a: Vec3fc, b: Vec3fc, t: Float): Vec3fc {
-                            return Vec3f(a).fma(b - a, t)
+                Vec3f::class -> Varying(
+                    vertexOutput as Output<Vec3f>,
+                    fragmentInput as Input<Vec3f>,
+                    object : Interpolator<Vec3f> {
+                        override fun invoke(a: Vec3f, b: Vec3f, t: Float): Vec3f {
+                            return a + (b - a) * t
                         }
 
                         override fun invoke(
-                            a: Vec3fc,
+                            a: Vec3f,
                             wa: Float,
-                            b: Vec3fc,
+                            b: Vec3f,
                             wb: Float,
-                            c: Vec3fc,
+                            c: Vec3f,
                             wc: Float
-                        ): Vec3fc {
-                            return Vec3f()
-                                .fma(a, wa)
-                                .fma(b, wb)
-                                .fma(c, wc)
+                        ): Vec3f {
+                            return a * wa + b * wb + c * wc
                         }
                     }
                 )
 
-                Vec4fc::class -> Varying(
-                    vertexOutput as Output<Vec4fc>,
-                    fragmentInput as Input<Vec4fc>,
-                    object : Interpolator<Vec4fc> {
-                        override fun invoke(a: Vec4fc, b: Vec4fc, t: Float): Vec4fc {
-                            return Vec4f(a).fma(b - a, t)
+                Vec4f::class -> Varying(
+                    vertexOutput as Output<Vec4f>,
+                    fragmentInput as Input<Vec4f>,
+                    object : Interpolator<Vec4f> {
+                        override fun invoke(a: Vec4f, b: Vec4f, t: Float): Vec4f {
+                            return a + (b - a) * t
                         }
 
                         override fun invoke(
-                            a: Vec4fc,
+                            a: Vec4f,
                             wa: Float,
-                            b: Vec4fc,
+                            b: Vec4f,
                             wb: Float,
-                            c: Vec4fc,
+                            c: Vec4f,
                             wc: Float
-                        ): Vec4fc {
-                            return Vec4f()
-                                .fma(a, wa)
-                                .fma(b, wb)
-                                .fma(c, wc)
+                        ): Vec4f {
+                            return a * wa + b * wb + c * wc
                         }
                     }
                 )
@@ -585,7 +500,7 @@ class GraphicsPipeline(
                                     fragmentShader.shader.main()
                                 }
 
-                                val color = fo[fragmentShader.color.id.index] as? Vec4fc
+                                val color = fo[fragmentShader.color.id.index] as? Vec4f
                                     ?: error("no fragment shader output")
 
                                 val r = (color.x.coerceIn(0.0f, 1.0f) * 255.999f).toInt() and 0xff
@@ -612,7 +527,7 @@ class GraphicsPipeline(
         v2: Array<Any>,
     ): List<ClipVertex> {
         fun toClipVertex(outputs: Array<Any>): ClipVertex {
-            val position = outputs[vertexShader.position.id.index] as? Vec4fc
+            val position = outputs[vertexShader.position.id.index] as? Vec4f
                 ?: error("Vertex shader did not write a valid clip-space position")
 
             val values = Array(varyings.size) { index ->
@@ -631,7 +546,7 @@ class GraphicsPipeline(
 
         // OpenGL-style homogeneous clip volume:
         // -w <= x <= w, -w <= y <= w, -w <= z <= w.
-        val planes: List<(Vec4fc) -> Float> = listOf(
+        val planes: List<(Vec4f) -> Float> = listOf(
             { p -> p.x + p.w }, // left
             { p -> p.w - p.x }, // right
             { p -> p.y + p.w }, // bottom
@@ -731,7 +646,7 @@ class GraphicsPipeline(
         fun orient(a: ScreenVertex, b: ScreenVertex, c: ScreenVertex): Float =
             (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
 
-        var p0 = project(v0) ?: return null
+        val p0 = project(v0) ?: return null
         var p1 = project(v1) ?: return null
         var p2 = project(v2) ?: return null
 

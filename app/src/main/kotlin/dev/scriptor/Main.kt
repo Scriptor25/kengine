@@ -53,8 +53,8 @@ object Context {
 }
 
 data class Particle(
-    val p: Vec3f,
-    val v: Vec3f,
+    var p: Vec3f,
+    var v: Vec3f,
 )
 
 @OptIn(ExperimentalAtomicApi::class)
@@ -136,15 +136,15 @@ fun main() {
         val transform = uniform<Mat4fc>()
         val model = uniform<Mat4fc>()
 
-        val inPosition = input<Vec3fc>(0)
-        val inNormal = input<Vec3fc>(1)
-        val inTexture = input<Vec2fc>(2)
-        val inColor = input<Vec4fc>(3)
+        val inPosition = input<Vec3f>(0)
+        val inNormal = input<Vec3f>(1)
+        val inTexture = input<Vec2f>(2)
+        val inColor = input<Vec4f>(3)
 
-        val outPosition = output<Vec3fc>(0)
-        val outNormal = output<Vec3fc>(1)
-        val outTexture = output<Vec2fc>(2)
-        val outColor = output<Vec4fc>(3)
+        val outPosition = output<Vec3f>(0)
+        val outNormal = output<Vec3f>(1)
+        val outTexture = output<Vec2f>(2)
+        val outColor = output<Vec4f>(3)
 
         defaultVertexAttributes += VertexAttribute(
             inPosition,
@@ -154,17 +154,17 @@ fun main() {
         defaultVertexAttributes += VertexAttribute(
             inNormal,
             VertexFormat.VEC3,
-            Vec3fc.SIZE_BYTES,
+            Vec3f.SIZE_BYTES,
         )
         defaultVertexAttributes += VertexAttribute(
             inTexture,
             VertexFormat.VEC2,
-            Vec3fc.SIZE_BYTES * 2,
+            Vec3f.SIZE_BYTES * 2,
         )
         defaultVertexAttributes += VertexAttribute(
             inColor,
             VertexFormat.VEC4,
-            Vec2fc.SIZE_BYTES + Vec3fc.SIZE_BYTES * 2,
+            Vec2f.SIZE_BYTES + Vec3f.SIZE_BYTES * 2,
         )
 
         main {
@@ -181,12 +181,12 @@ fun main() {
     }
 
     val defaultFragmentShader = fragmentShader {
-        val inPosition = input<Vec3fc>(0)
-        val inNormal = input<Vec3fc>(1)
-        val inTexture = input<Vec2fc>(2)
-        val inColor = input<Vec4fc>(3)
+        val inPosition = input<Vec3f>(0)
+        val inNormal = input<Vec3f>(1)
+        val inTexture = input<Vec2f>(2)
+        val inColor = input<Vec4f>(3)
 
-        val sun = Vec3f(0.5f, 1.0f, 1.0f).normalizeAssign()
+        val sun = Vec3f(0.5f, 1.0f, 1.0f).unit
 
         main {
             val t = (sun dot inNormal()).coerceIn(0.01f, 1.0f)
@@ -196,7 +196,7 @@ fun main() {
     }
 
     val defaultVertexLayout = VertexLayout(
-        Vec2fc.SIZE_BYTES + Vec3fc.SIZE_BYTES * 2 + Vec4fc.SIZE_BYTES,
+        Vec2f.SIZE_BYTES + Vec3f.SIZE_BYTES * 2 + Vec4f.SIZE_BYTES,
         defaultVertexAttributes,
     )
 
@@ -331,22 +331,22 @@ fun main() {
 
             for (particle in particles) {
                 if (particle.p.x > Context.width) {
-                    particle.p.x = Context.width.toFloat()
-                    particle.v.x = -particle.v.x.absoluteValue
+                    particle.p = Vec3f(Context.width.toFloat(), particle.p.y, particle.p.z)
+                    particle.v = Vec3f(-particle.v.x.absoluteValue, particle.v.y, particle.v.z)
                 } else if (particle.p.x < 0) {
-                    particle.p.x = 0.0f
-                    particle.v.x = particle.v.x.absoluteValue
+                    particle.p = Vec3f(0.0f, particle.p.y, particle.p.z)
+                    particle.v = Vec3f(particle.v.x.absoluteValue, particle.v.y, particle.v.z)
                 }
 
                 if (particle.p.y > Context.height) {
-                    particle.p.y = Context.height.toFloat()
-                    particle.v.y = -particle.v.y.absoluteValue
+                    particle.p = Vec3f(particle.p.x, Context.height.toFloat(), particle.p.z)
+                    particle.v = Vec3f(particle.v.x, -particle.v.y.absoluteValue, particle.v.z)
                 } else if (particle.p.y < 0) {
-                    particle.p.y = 0.0f
-                    particle.v.y = particle.v.y.absoluteValue
+                    particle.p = Vec3f(particle.p.x, 0.0f, particle.p.z)
+                    particle.v = Vec3f(particle.v.x, particle.v.y.absoluteValue, particle.v.z)
                 }
 
-                particle.p.fma(particle.v, speed)
+                particle.p += particle.v * speed
             }
 
             do {

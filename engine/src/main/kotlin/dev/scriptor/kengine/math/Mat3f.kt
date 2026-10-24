@@ -27,8 +27,8 @@ interface Mat3fc {
         return o
     }
 
-    operator fun times(vec: Vec3fc): Vec3f {
-        val o = Vec3f()
+    operator fun times(vec: Vec3f): Vec3f {
+        val o = FloatArray(3)
 
         for (i in 0..2) {
             o[i] = 0.0f +
@@ -37,7 +37,7 @@ interface Mat3fc {
                     this[i, 2] * vec[2]
         }
 
-        return o
+        return Vec3f(o[0], o[1], o[2])
     }
 }
 

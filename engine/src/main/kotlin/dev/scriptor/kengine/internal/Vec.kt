@@ -4,22 +4,22 @@ sealed interface VecSize {
 
     val count: Int
 
-    object Vec2 : VecSize {
+    data object Vec2 : VecSize {
         override val count = 2
     }
 
-    object Vec3 : VecSize {
+    data object Vec3 : VecSize {
         override val count = 3
     }
 
-    object Vec4 : VecSize {
+    data object Vec4 : VecSize {
         override val count = 4
     }
 }
 
 interface Scalar<T : Number> {
 
-    object ByteScalar : Scalar<Byte> {
+    data object ByteScalar : Scalar<Byte> {
 
         override fun allocate(count: Int): Array<Byte> {
             return Array(count) { 0 }
@@ -54,7 +54,7 @@ interface Scalar<T : Number> {
         }
     }
 
-    object ShortScalar : Scalar<Short> {
+    data object ShortScalar : Scalar<Short> {
 
         override fun allocate(count: Int): Array<Short> {
             return Array(count) { 0 }
@@ -89,7 +89,7 @@ interface Scalar<T : Number> {
         }
     }
 
-    object IntScalar : Scalar<Int> {
+    data object IntScalar : Scalar<Int> {
 
         override fun allocate(count: Int): Array<Int> {
             return Array(count) { 0 }
@@ -124,7 +124,7 @@ interface Scalar<T : Number> {
         }
     }
 
-    object LongScalar : Scalar<Long> {
+    data object LongScalar : Scalar<Long> {
 
         override fun allocate(count: Int): Array<Long> {
             return Array(count) { 0 }
@@ -159,7 +159,7 @@ interface Scalar<T : Number> {
         }
     }
 
-    object FloatScalar : Scalar<Float> {
+    data object FloatScalar : Scalar<Float> {
 
         override fun allocate(count: Int): Array<Float> {
             return Array(count) { 0.0f }
@@ -194,7 +194,7 @@ interface Scalar<T : Number> {
         }
     }
 
-    object DoubleScalar : Scalar<Double> {
+    data object DoubleScalar : Scalar<Double> {
 
         override fun allocate(count: Int): Array<Double> {
             return Array(count) { 0.0 }

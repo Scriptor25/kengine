@@ -1,16 +1,14 @@
 package dev.scriptor.kengine
 
 import dev.scriptor.kengine.math.Vec2f
-import dev.scriptor.kengine.math.Vec2fc
 import dev.scriptor.kengine.math.Vec3f
-import dev.scriptor.kengine.math.Vec3fc
 import java.io.InputStream
 import java.nio.ByteBuffer
 
 data class ObjectFile(
-    val positions: List<Vec3fc>,
-    val textures: List<Vec2fc>,
-    val normals: List<Vec3fc>,
+    val positions: List<Vec3f>,
+    val textures: List<Vec2f>,
+    val normals: List<Vec3f>,
     val faces: List<Face>,
 ) {
 
@@ -24,7 +22,7 @@ data class ObjectFile(
         val vertices: List<Vertex>,
     )
 
-    fun generate(block: (MutableList<Float>, Vec3fc, Vec2fc, Vec3fc) -> Unit): Mesh {
+    fun generate(block: (MutableList<Float>, Vec3f, Vec2f, Vec3f) -> Unit): Mesh {
         val vertices = mutableListOf<Float>()
         val elements = mutableListOf<Int>()
 
@@ -83,9 +81,9 @@ data class ObjectFile(
 
     companion object {
         fun load(stream: InputStream): ObjectFile {
-            val positions = mutableListOf<Vec3fc>()
-            val textures = mutableListOf<Vec2fc>()
-            val normals = mutableListOf<Vec3fc>()
+            val positions = mutableListOf<Vec3f>()
+            val textures = mutableListOf<Vec2f>()
+            val normals = mutableListOf<Vec3f>()
             val faces = mutableListOf<Face>()
 
             stream.bufferedReader().forEachLine { line ->
@@ -107,9 +105,9 @@ data class ObjectFile(
         }
 
         private fun parse(
-            positions: MutableList<Vec3fc>,
-            textures: MutableList<Vec2fc>,
-            normals: MutableList<Vec3fc>,
+            positions: MutableList<Vec3f>,
+            textures: MutableList<Vec2f>,
+            normals: MutableList<Vec3f>,
             faces: MutableList<Face>,
             line: String,
         ) {
