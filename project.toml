@@ -15,3 +15,19 @@ maven = ["https://repo1.maven.org/maven2/"]
 
 [dependencies]
 maven = ["org.jetbrains.kotlin:kotlin-stdlib:2.4.20"]
+
+[compiler]
+platform = "jvm"
+
+[compiler.common]
+languageVersion = "2.6"
+apiVersion = "2.6"
+
+extraArguments = [
+    "-Xjvm-enable-preview",
+    "-Xvalhalla-value-classes",
+    "-XXLanguage:+FullValueClasses",
+]
+
+[compiler.jvm]
+jdkHomePath = "/usr/local/lib/jvm/java-28-openjdk"
