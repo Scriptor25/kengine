@@ -20,8 +20,8 @@ interface Surface {
     fun depth(index: Int, value: Float)
 }
 
-class RuntimeShaderContext(
-    private val uniformValues: Array<out Any>,
+private class RuntimeShaderContext(
+    private val uniformValues: Array<Any>,
     private val inputValues: Array<Any>,
     private val outputValues: Array<Any>,
 ) : ShaderContext {
@@ -365,7 +365,8 @@ class GraphicsPipeline(
     operator fun invoke(
         surface: Surface,
         mesh: Mesh,
-        uniforms: Array<out Any> = emptyArray(),
+        vertexUniforms: Array<Any> = emptyArray(),
+        fragmentUniforms: Array<Any> = emptyArray(),
     ) {
         invoke(
             surface,
@@ -373,7 +374,8 @@ class GraphicsPipeline(
             mesh.elementBuffer,
             0,
             mesh.count,
-            uniforms,
+            vertexUniforms,
+            fragmentUniforms,
         )
     }
 
@@ -383,11 +385,16 @@ class GraphicsPipeline(
         elementBuffer: ByteBuffer,
         first: Int,
         count: Int,
-        uniforms: Array<out Any> = emptyArray(),
+        vertexUniforms: Array<Any> = emptyArray(),
+        fragmentUniforms: Array<Any> = emptyArray(),
     ) {
         val vi: Array<Any> = Array(vertexShader.shader.inputs.size) {}
         val vo: Array<Any> = Array(vertexShader.shader.outputs.size) {}
-        val vc = RuntimeShaderContext(uniforms, vi, vo)
+        val vc = RuntimeShaderContext(
+            vertexUniforms,
+            vi,
+            vo,
+        )
 
         val vertexCount = vertexBuffer.remaining() / vertexLayout.stride
         val vso: Array<Array<Any>> = Array(vertexCount) { Array(vertexShader.shader.outputs.size) {} }
@@ -461,7 +468,11 @@ class GraphicsPipeline(
                 tasks += Callable {
                     val fi: Array<Any> = Array(fragmentShader.shader.inputs.size) {}
                     val fo: Array<Any> = Array(fragmentShader.shader.outputs.size) {}
-                    val fc = RuntimeShaderContext(uniforms, fi, fo)
+                    val fc = RuntimeShaderContext(
+                        fragmentUniforms,
+                        fi,
+                        fo,
+                    )
 
                     for (triangle in bin) {
                         rasterizer.rasterize(

@@ -5,29 +5,23 @@ group = "dev.example"
 version = "1.0.0"
 
 [modules]
-include = [
-    "app",
-    "engine",
-]
+include = ["app", "engine"]
 
 [repositories]
 maven = ["https://repo1.maven.org/maven2/"]
 
 [dependencies]
-maven = ["org.jetbrains.kotlin:kotlin-stdlib:2.4.20"]
+maven = ["org.jetbrains.kotlin:kotlin-stdlib:2.5.0-Beta2"]
 
 [compiler]
 platform = "jvm"
 
 [compiler.common]
-languageVersion = "2.6"
-apiVersion = "2.6"
-
-extraArguments = [
-    "-Xjvm-enable-preview",
-    "-Xvalhalla-value-classes",
-    "-XXLanguage:+FullValueClasses",
-]
+apiVersion = "2.5"
+languageVersion = "2.5"
 
 [compiler.jvm]
-jdkHomePath = "/usr/local/lib/jvm/java-28-openjdk"
+jdkHome = "/usr/local/lib/jvm/java-28-openjdk"
+target = "28"
+enablePreview = true
+extra = ["-Xvalhalla-value-classes", "-XXLanguage:+FullValueClasses"]

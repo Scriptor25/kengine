@@ -23,7 +23,6 @@ value class OutputId(val index: Int)
 data class Uniform<T : Any>(
     val id: UniformId,
     val type: KClass<T>,
-    val location: Int,
 ) {
     context(context: ShaderContext)
     operator fun invoke(): T = type.cast(context[id])
@@ -61,7 +60,6 @@ open class ShaderBuilder {
     private val inputs = mutableListOf<Input<*>>()
     private val outputs = mutableListOf<Output<*>>()
 
-    private var nextUniformLocation = 0
     private var nextInputLocation = 0
     private var nextOutputLocation = 0
 
@@ -74,13 +72,10 @@ open class ShaderBuilder {
         main,
     )
 
-    fun <T : Any> uniform(type: KClass<T>, location: Int): Uniform<T> {
-        nextUniformLocation = location + 1
-
+    fun <T : Any> uniform(type: KClass<T>): Uniform<T> {
         val uniform = Uniform(
             UniformId(uniforms.size),
             type,
-            location,
         )
 
         uniforms += uniform
@@ -113,10 +108,6 @@ open class ShaderBuilder {
         return output
     }
 
-    fun <T : Any> uniform(type: KClass<T>): Uniform<T> {
-        return uniform(type, nextUniformLocation)
-    }
-
     fun <T : Any> input(type: KClass<T>): Input<T> {
         return input(type, nextInputLocation)
     }
@@ -124,9 +115,6 @@ open class ShaderBuilder {
     fun <T : Any> output(type: KClass<T>): Output<T> {
         return output(type, nextOutputLocation)
     }
-
-    inline fun <reified T : Any> uniform(location: Int): Uniform<T> =
-        uniform(T::class, location)
 
     inline fun <reified T : Any> input(location: Int): Input<T> =
         input(T::class, location)
@@ -159,7 +147,7 @@ class VertexShader(
 
 class VertexShaderBuilder : ShaderBuilder() {
 
-    val position = output<Vec4f>()
+    val position = output<Vec4f>(-1)
 
     internal fun buildVertex(): VertexShader = VertexShader(
         build(),
@@ -178,7 +166,7 @@ class FragmentShader(
 
 class FragmentShaderBuilder : ShaderBuilder() {
 
-    val color = output<Vec4f>()
+    val color = output<Vec4f>(-1)
 
     internal fun buildFragment(): FragmentShader = FragmentShader(
         build(),

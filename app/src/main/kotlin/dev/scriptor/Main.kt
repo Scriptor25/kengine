@@ -1,7 +1,10 @@
 package dev.scriptor
 
 import dev.scriptor.kengine.*
-import dev.scriptor.kengine.math.*
+import dev.scriptor.kengine.math.Mat4fc
+import dev.scriptor.kengine.math.Vec2f
+import dev.scriptor.kengine.math.Vec3f
+import dev.scriptor.kengine.math.Vec4f
 import java.awt.Canvas
 import java.awt.Graphics2D
 import java.awt.RenderingHints
@@ -10,7 +13,7 @@ import java.awt.event.ComponentEvent
 import java.awt.event.KeyEvent
 import java.awt.image.BufferedImage
 import java.awt.image.DataBufferInt
-import java.nio.ByteBuffer
+import javax.imageio.ImageIO
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.math.absoluteValue
@@ -21,7 +24,7 @@ object Context {
     @OptIn(ExperimentalAtomicApi::class)
     val running = AtomicBoolean(true)
 
-    const val SCALE = 2
+    const val SCALE = 4
 
     var width: Int = 0
     var height: Int = 0
@@ -56,6 +59,11 @@ data class Particle(
     var p: Vec3f,
     var v: Vec3f,
 )
+
+interface Sampler2D {
+
+    operator fun invoke(xy: Vec2f): Vec4f
+}
 
 @OptIn(ExperimentalAtomicApi::class)
 fun main() {
@@ -136,15 +144,15 @@ fun main() {
         val transform = uniform<Mat4fc>()
         val model = uniform<Mat4fc>()
 
-        val inPosition = input<Vec3f>(0)
-        val inNormal = input<Vec3f>(1)
-        val inTexture = input<Vec2f>(2)
-        val inColor = input<Vec4f>(3)
+        val inPosition = input<Vec3f>()
+        val inNormal = input<Vec3f>()
+        val inTexture = input<Vec2f>()
+        val inColor = input<Vec4f>()
 
-        val outPosition = output<Vec3f>(0)
-        val outNormal = output<Vec3f>(1)
-        val outTexture = output<Vec2f>(2)
-        val outColor = output<Vec4f>(3)
+        val outPosition = output<Vec3f>()
+        val outNormal = output<Vec3f>()
+        val outTexture = output<Vec2f>()
+        val outColor = output<Vec4f>()
 
         defaultVertexAttributes += VertexAttribute(
             inPosition,
@@ -181,17 +189,20 @@ fun main() {
     }
 
     val defaultFragmentShader = fragmentShader {
-        val inPosition = input<Vec3f>(0)
-        val inNormal = input<Vec3f>(1)
-        val inTexture = input<Vec2f>(2)
-        val inColor = input<Vec4f>(3)
+        val sampler = uniform<Sampler2D>()
+
+        val inPosition = input<Vec3f>()
+        val inNormal = input<Vec3f>()
+        val inTexture = input<Vec2f>()
+        val inColor = input<Vec4f>()
 
         val sun = Vec3f(0.5f, 1.0f, 1.0f).unit
 
         main {
-            val t = (sun dot inNormal()).coerceIn(0.01f, 1.0f)
+            val sampled = sampler()(inTexture())
+            val t = (sun dot inNormal()).coerceIn(0.1f, 1.0f)
 
-            color(Vec4f(t, t, t, 1.0f))
+            color(Vec4f(sampled.xyz * t, 1.0f))
         }
     }
 
@@ -207,36 +218,6 @@ fun main() {
         defaultFragmentShader,
         defaultVertexLayout,
         defaultRasterizer,
-    )
-
-    val defaultMesh = Mesh(
-        vertexBuffer = ByteBuffer.allocate(4 * defaultPipeline.vertexLayout.stride)
-            // 0
-            .putVec3f(-0.5f, -0.5f, 0.0f)
-            .putVec3f(0.0f, 0.0f, -1.0f)
-            .putVec2f(0.0f, 0.0f)
-            .putVec4f(0.0f, 0.0f, 1.0f, 1.0f)
-            // 1
-            .putVec3f(-0.5f, 0.5f, 0.0f)
-            .putVec3f(0.0f, 0.0f, -1.0f)
-            .putVec2f(0.0f, 1.0f)
-            .putVec4f(0.0f, 1.0f, 0.0f, 1.0f)
-            // 2
-            .putVec3f(0.5f, 0.5f, 0.0f)
-            .putVec3f(0.0f, 0.0f, -1.0f)
-            .putVec2f(1.0f, 1.0f)
-            .putVec4f(1.0f, 1.0f, 1.0f, 1.0f)
-            // 3
-            .putVec3f(0.5f, -0.5f, 0.0f)
-            .putVec3f(0.0f, 0.0f, -1.0f)
-            .putVec2f(1.0f, 0.0f)
-            .putVec4f(1.0f, 0.0f, 0.0f, 1.0f)
-            .flip(),
-        elementBuffer = ByteBuffer.allocate(6 * Int.SIZE_BYTES)
-            .putInt(0).putInt(1).putInt(2)
-            .putInt(2).putInt(3).putInt(0)
-            .flip(),
-        count = 6,
     )
 
     val cubeObjectStream = ClassLoader.getSystemResourceAsStream("cube.obj")
@@ -263,6 +244,25 @@ fun main() {
     var time = Clock.System.now()
 
     var angle = 0.0f
+
+    val cubeImageStream = ClassLoader.getSystemResourceAsStream("cube.png")
+    val cubeImage = ImageIO.read(cubeImageStream)
+
+    val sampler = object : Sampler2D {
+        val m = 1.0f / 255.0f
+
+        override fun invoke(xy: Vec2f): Vec4f {
+            val x = (xy.x.coerceIn(0.0f, 1.0f) * (cubeImage.width - 1).toFloat()).toInt()
+            val y = (xy.y.coerceIn(0.0f, 1.0f) * (cubeImage.height - 1).toFloat()).toInt()
+            val data = cubeImage.getRGB(x, y)
+            return Vec4f(
+                ((data ushr 16) and 0xff).toFloat() * m,
+                ((data ushr 8) and 0xff).toFloat() * m,
+                ((data ushr 0) and 0xff).toFloat() * m,
+                ((data ushr 24) and 0xff).toFloat() * m,
+            )
+        }
+    }
 
     thread = Thread {
         canvas.createBufferStrategy(2)
@@ -314,6 +314,9 @@ fun main() {
                         transform1,
                         model1,
                     ),
+                    arrayOf(
+                        sampler,
+                    ),
                 )
                 defaultPipeline(
                     surface,
@@ -321,6 +324,9 @@ fun main() {
                     arrayOf(
                         transform2,
                         model2,
+                    ),
+                    arrayOf(
+                        sampler,
                     ),
                 )
 
