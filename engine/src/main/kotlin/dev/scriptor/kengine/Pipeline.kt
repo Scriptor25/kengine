@@ -256,11 +256,20 @@ data class Varying<T : Any>(
     val interpolator: Interpolator<T>,
 )
 
+enum class CullMode {
+    NONE,
+    FRONT,
+    BACK,
+    FRONT_AND_BACK,
+}
+
 class GraphicsPipeline(
     val vertexShader: VertexShader,
     val fragmentShader: FragmentShader,
     val vertexLayout: VertexLayout,
     val rasterizer: Rasterizer,
+    val cullMode: CullMode = CullMode.BACK,
+    val frontFaceCounterClockwise: Boolean = true,
     val executor: ExecutorService = Executors.newFixedThreadPool(
         Runtime.getRuntime().availableProcessors().coerceAtLeast(1),
         Thread.ofPlatform().daemon().factory(),
@@ -665,6 +674,18 @@ class GraphicsPipeline(
 
         if (area == 0.0f || !area.isFinite())
             return null
+
+        val isFrontFace = when {
+            frontFaceCounterClockwise -> area < 0.0f
+            else -> area > 0.0f
+        }
+
+        when (cullMode) {
+            CullMode.NONE -> Unit
+            CullMode.FRONT -> if (isFrontFace) return null
+            CullMode.BACK -> if (!isFrontFace) return null
+            CullMode.FRONT_AND_BACK -> return null
+        }
 
         if (area < 0.0f) {
             val tmp = p1
