@@ -1,0 +1,42 @@
+package dev.scriptor.shader
+
+import dev.scriptor.kengine.FragmentShaderLayout
+import dev.scriptor.kengine.Sampler2D
+import dev.scriptor.kengine.Shader
+import dev.scriptor.kengine.ShaderContext
+import dev.scriptor.kengine.math.Vec2f
+import dev.scriptor.kengine.math.Vec3f
+import dev.scriptor.kengine.math.Vec4f
+
+object DefaultFragmentShaderLayout : FragmentShaderLayout() {
+    val sampler = uniform<Sampler2D>()
+
+    val inPosition = input<Vec3f>()
+    val inNormal = input<Vec3f>()
+    val inTexture = input<Vec2f>()
+    val inColor = input<Vec4f>()
+}
+
+class DefaultFragmentShader(
+    layout: DefaultFragmentShaderLayout,
+    context: ShaderContext,
+) : Shader<DefaultFragmentShaderLayout>(layout, context) {
+
+    val sampler by use(layout.sampler)
+
+    val inPosition by use(layout.inPosition)
+    val inNormal by use(layout.inNormal)
+    val inTexture by use(layout.inTexture)
+    val inColor by use(layout.inColor)
+
+    var color by use(layout.color)
+
+    val sun = Vec3f(0.5f, 1.0f, 1.0f).unit
+
+    override fun main() {
+        val sampled = sampler(inTexture)
+        val t = (sun dot inNormal).coerceIn(0.1f, 1.0f)
+
+        color = Vec4f(sampled.xyz * t, 1.0f)
+    }
+}

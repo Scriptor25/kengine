@@ -1,13 +1,17 @@
 package dev.scriptor.kengine
 
+import dev.scriptor.kengine.math.Vec2f
+import dev.scriptor.kengine.math.Vec3f
 import dev.scriptor.kengine.math.Vec4f
 import kotlin.reflect.KClass
+import kotlin.reflect.KProperty
 import kotlin.reflect.cast
 
 interface ShaderContext {
 
     operator fun get(id: UniformId): Any
     operator fun get(id: InputId): Any
+    operator fun get(id: OutputId): Any
     operator fun set(id: OutputId, value: Any)
 }
 
@@ -23,62 +27,43 @@ value class OutputId(val index: Int)
 data class Uniform<T : Any>(
     val id: UniformId,
     val type: KClass<T>,
-) {
-    context(context: ShaderContext)
-    operator fun invoke(): T = type.cast(context[id])
-}
+)
 
 data class Input<T : Any>(
     val id: InputId,
     val type: KClass<T>,
     val location: Int,
-) {
-    context(context: ShaderContext)
-    operator fun invoke(): T = type.cast(context[id])
-}
+)
 
 data class Output<T : Any>(
     val id: OutputId,
     val type: KClass<T>,
     val location: Int,
-) {
-    context(context: ShaderContext)
-    operator fun invoke(value: T) {
-        context[id] = value
-    }
-}
-
-class Shader(
-    val uniforms: Array<Uniform<*>>,
-    val inputs: Array<Input<*>>,
-    val outputs: Array<Output<*>>,
-    val main: context(ShaderContext) () -> Unit,
 )
 
-open class ShaderBuilder {
-    private val uniforms = mutableListOf<Uniform<*>>()
-    private val inputs = mutableListOf<Input<*>>()
-    private val outputs = mutableListOf<Output<*>>()
+abstract class ShaderLayout {
+
+    private val uniformsList = mutableListOf<Uniform<*>>()
+    private val inputsList = mutableListOf<Input<*>>()
+    private val outputsList = mutableListOf<Output<*>>()
 
     private var nextInputLocation = 0
     private var nextOutputLocation = 0
 
-    private lateinit var main: context(ShaderContext) () -> Unit
-
-    internal fun build(): Shader = Shader(
-        uniforms.toTypedArray(),
-        inputs.toTypedArray(),
-        outputs.toTypedArray(),
-        main,
-    )
+    val uniforms: List<Uniform<*>>
+        get() = uniformsList
+    val inputs: List<Input<*>>
+        get() = inputsList
+    val outputs: List<Output<*>>
+        get() = outputsList
 
     fun <T : Any> uniform(type: KClass<T>): Uniform<T> {
         val uniform = Uniform(
-            UniformId(uniforms.size),
+            UniformId(uniformsList.size),
             type,
         )
 
-        uniforms += uniform
+        uniformsList += uniform
         return uniform
     }
 
@@ -86,12 +71,12 @@ open class ShaderBuilder {
         nextInputLocation = location + 1
 
         val input = Input(
-            InputId(inputs.size),
+            InputId(inputsList.size),
             type,
             location,
         )
 
-        inputs += input
+        inputsList += input
         return input
     }
 
@@ -99,12 +84,12 @@ open class ShaderBuilder {
         nextOutputLocation = location + 1
 
         val output = Output(
-            OutputId(outputs.size),
+            OutputId(outputsList.size),
             type,
             location,
         )
 
-        outputs += output
+        outputsList += output
         return output
     }
 
@@ -131,49 +116,74 @@ open class ShaderBuilder {
     inline fun <reified T : Any> output(): Output<T> =
         output(T::class)
 
-    fun main(block: context(ShaderContext) () -> Unit) {
-        main = block
+    fun layout(): VertexLayout {
+        val stride: Int
+        val attributes = buildList {
+            var offset = 0
+            for (input in inputs.sortedBy(Input<*>::location)) {
+                val format = when (input.type) {
+                    Float::class -> VertexFormat.FLOAT
+                    Vec2f::class -> VertexFormat.VEC2
+                    Vec3f::class -> VertexFormat.VEC3
+                    Vec4f::class -> VertexFormat.VEC4
+                    else -> error("unsupported vertex format")
+                }
+
+                add(VertexAttribute(input as Input<Any>, format as VertexFormat<Any>, offset))
+                offset += format.size
+            }
+
+            stride = offset
+        }
+
+        return VertexLayout(stride, attributes)
     }
 }
 
-fun shader(block: ShaderBuilder.() -> Unit): Shader {
-    return ShaderBuilder().apply(block).build()
-}
-
-class VertexShader(
-    val shader: Shader,
-    val position: Output<Vec4f>,
-)
-
-class VertexShaderBuilder : ShaderBuilder() {
+abstract class VertexShaderLayout : ShaderLayout() {
 
     val position = output<Vec4f>(-1)
-
-    internal fun buildVertex(): VertexShader = VertexShader(
-        build(),
-        position,
-    )
 }
 
-fun vertexShader(block: VertexShaderBuilder.() -> Unit): VertexShader {
-    return VertexShaderBuilder().apply(block).buildVertex()
-}
-
-class FragmentShader(
-    val shader: Shader,
-    val color: Output<Vec4f>,
-)
-
-class FragmentShaderBuilder : ShaderBuilder() {
+abstract class FragmentShaderLayout : ShaderLayout() {
 
     val color = output<Vec4f>(-1)
-
-    internal fun buildFragment(): FragmentShader = FragmentShader(
-        build(),
-        color,
-    )
 }
 
-fun fragmentShader(block: FragmentShaderBuilder.() -> Unit): FragmentShader {
-    return FragmentShaderBuilder().apply(block).buildFragment()
+abstract class Shader<L : ShaderLayout>(
+    val layout: L,
+    private val context: ShaderContext,
+) {
+    interface Delegate<T> {
+        operator fun getValue(thisRef: Any?, property: KProperty<*>): T
+    }
+
+    interface MutableDelegate<T> {
+        operator fun getValue(thisRef: Any?, property: KProperty<*>): T
+        operator fun setValue(thisRef: Any?, property: KProperty<*>, value: T)
+    }
+
+    fun <T : Any> use(field: Uniform<T>): Delegate<T> = object : Delegate<T> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>): T {
+            return field.type.cast(context[field.id])
+        }
+    }
+
+    fun <T : Any> use(field: Input<T>): Delegate<T> = object : Delegate<T> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>): T {
+            return field.type.cast(context[field.id])
+        }
+    }
+
+    fun <T : Any> use(field: Output<T>): MutableDelegate<T> = object : MutableDelegate<T> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>): T {
+            return field.type.cast(context[field.id])
+        }
+
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {
+            context[field.id] = value
+        }
+    }
+
+    abstract fun main()
 }

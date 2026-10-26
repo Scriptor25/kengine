@@ -34,12 +34,16 @@ private class RuntimeShaderContext(
         return inputValues[id.index]
     }
 
+    override fun get(id: OutputId): Any {
+        return outputValues[id.index]
+    }
+
     override fun set(id: OutputId, value: Any) {
         outputValues[id.index] = value
     }
 }
 
-interface VertexFormat<T : Any> {
+sealed interface VertexFormat<T : Any> {
 
     val type: KClass<T>
     val size: Int
@@ -263,9 +267,26 @@ enum class CullMode {
     FRONT_AND_BACK,
 }
 
-class GraphicsPipeline(
-    val vertexShader: VertexShader,
-    val fragmentShader: FragmentShader,
+interface Sampler1D {
+
+    operator fun invoke(x: Float): Vec4f
+}
+
+interface Sampler2D {
+
+    operator fun invoke(xy: Vec2f): Vec4f
+}
+
+interface Sampler3D {
+
+    operator fun invoke(xyz: Vec3f): Vec4f
+}
+
+class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
+    val vertexShaderLayout: V,
+    val fragmentShaderLayout: F,
+    val vertexShaderFactory: (V, ShaderContext) -> Shader<V>,
+    val fragmentShaderFactory: (F, ShaderContext) -> Shader<F>,
     val vertexLayout: VertexLayout,
     val rasterizer: Rasterizer,
     val cullMode: CullMode = CullMode.BACK,
@@ -278,11 +299,11 @@ class GraphicsPipeline(
     private val varyings: List<Varying<*>>
 
     init {
-        val vertexOutputs = vertexShader.shader.outputs
-            .filter { it.id != vertexShader.position.id }
+        val vertexOutputs = vertexShaderLayout.outputs
+            .filter { it.id != vertexShaderLayout.position.id }
             .associateBy { it.location }
 
-        varyings = fragmentShader.shader.inputs.map { fragmentInput ->
+        varyings = fragmentShaderLayout.inputs.map { fragmentInput ->
             val vertexOutput = vertexOutputs[fragmentInput.location]
                 ?: error("missing vertex output for fragment input location ${fragmentInput.location}")
 
@@ -397,16 +418,18 @@ class GraphicsPipeline(
         vertexUniforms: Array<Any> = emptyArray(),
         fragmentUniforms: Array<Any> = emptyArray(),
     ) {
-        val vi: Array<Any> = Array(vertexShader.shader.inputs.size) {}
-        val vo: Array<Any> = Array(vertexShader.shader.outputs.size) {}
+        val vi: Array<Any> = Array(vertexShaderLayout.inputs.size) {}
+        val vo: Array<Any> = Array(vertexShaderLayout.outputs.size) {}
         val vc = RuntimeShaderContext(
             vertexUniforms,
             vi,
             vo,
         )
 
+        val vertexShader = vertexShaderFactory(vertexShaderLayout, vc)
+
         val vertexCount = vertexBuffer.remaining() / vertexLayout.stride
-        val vso: Array<Array<Any>> = Array(vertexCount) { Array(vertexShader.shader.outputs.size) {} }
+        val vso: Array<Array<Any>> = Array(vertexCount) { Array(vertexShaderLayout.outputs.size) {} }
 
         for (i in 0 until vertexCount) {
             vi.fill(Unit)
@@ -414,7 +437,7 @@ class GraphicsPipeline(
 
             vertexLayout.fetch(vertexBuffer, vertexBuffer.position() + i * vertexLayout.stride, vi)
 
-            context(vc) { vertexShader.shader.main() }
+            context(vc) { vertexShader.main() }
 
             vo.copyInto(vso[i])
         }
@@ -475,13 +498,15 @@ class GraphicsPipeline(
                 val tileMaxY = minOf(tileMinY + rasterizer.tileSize - 1, surface.height - 1)
 
                 tasks += Callable {
-                    val fi: Array<Any> = Array(fragmentShader.shader.inputs.size) {}
-                    val fo: Array<Any> = Array(fragmentShader.shader.outputs.size) {}
+                    val fi: Array<Any> = Array(fragmentShaderLayout.inputs.size) {}
+                    val fo: Array<Any> = Array(fragmentShaderLayout.outputs.size) {}
                     val fc = RuntimeShaderContext(
                         fragmentUniforms,
                         fi,
                         fo,
                     )
+
+                    val fragmentShader = fragmentShaderFactory(fragmentShaderLayout, fc)
 
                     for (triangle in bin) {
                         rasterizer.rasterize(
@@ -517,10 +542,10 @@ class GraphicsPipeline(
                                 }
 
                                 context(fc) {
-                                    fragmentShader.shader.main()
+                                    fragmentShader.main()
                                 }
 
-                                val color = fo[fragmentShader.color.id.index] as? Vec4f
+                                val color = fo[fragmentShaderLayout.color.id.index] as? Vec4f
                                     ?: error("no fragment shader output")
 
                                 val r = (color.x.coerceIn(0.0f, 1.0f) * 255.999f).toInt() and 0xff
@@ -547,7 +572,7 @@ class GraphicsPipeline(
         v2: Array<Any>,
     ): List<ClipVertex> {
         fun toClipVertex(outputs: Array<Any>): ClipVertex {
-            val position = outputs[vertexShader.position.id.index] as? Vec4f
+            val position = outputs[vertexShaderLayout.position.id.index] as? Vec4f
                 ?: error("Vertex shader did not write a valid clip-space position")
 
             val values = Array(varyings.size) { index ->

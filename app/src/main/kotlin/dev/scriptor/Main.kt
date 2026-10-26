@@ -5,6 +5,10 @@ import dev.scriptor.kengine.math.Mat4fc
 import dev.scriptor.kengine.math.Vec2f
 import dev.scriptor.kengine.math.Vec3f
 import dev.scriptor.kengine.math.Vec4f
+import dev.scriptor.shader.DefaultFragmentShader
+import dev.scriptor.shader.DefaultFragmentShaderLayout
+import dev.scriptor.shader.DefaultVertexShader
+import dev.scriptor.shader.DefaultVertexShaderLayout
 import java.awt.Canvas
 import java.awt.Graphics2D
 import java.awt.RenderingHints
@@ -59,11 +63,6 @@ data class Particle(
     var p: Vec3f,
     var v: Vec3f,
 )
-
-interface Sampler2D {
-
-    operator fun invoke(xy: Vec2f): Vec4f
-}
 
 @OptIn(ExperimentalAtomicApi::class)
 fun main() {
@@ -138,86 +137,13 @@ fun main() {
         }
     }
 
-    val defaultVertexAttributes = mutableListOf<VertexAttribute<*>>()
-
-    val defaultVertexShader = vertexShader {
-        val transform = uniform<Mat4fc>()
-        val model = uniform<Mat4fc>()
-
-        val inPosition = input<Vec3f>()
-        val inNormal = input<Vec3f>()
-        val inTexture = input<Vec2f>()
-        val inColor = input<Vec4f>()
-
-        val outPosition = output<Vec3f>()
-        val outNormal = output<Vec3f>()
-        val outTexture = output<Vec2f>()
-        val outColor = output<Vec4f>()
-
-        defaultVertexAttributes += VertexAttribute(
-            inPosition,
-            VertexFormat.VEC3,
-            0,
-        )
-        defaultVertexAttributes += VertexAttribute(
-            inNormal,
-            VertexFormat.VEC3,
-            Vec3f.SIZE_BYTES,
-        )
-        defaultVertexAttributes += VertexAttribute(
-            inTexture,
-            VertexFormat.VEC2,
-            Vec3f.SIZE_BYTES * 2,
-        )
-        defaultVertexAttributes += VertexAttribute(
-            inColor,
-            VertexFormat.VEC4,
-            Vec2f.SIZE_BYTES + Vec3f.SIZE_BYTES * 2,
-        )
-
-        main {
-            position(transform() * Vec4f(inPosition(), 1.0f))
-
-            val pos = model() * Vec4f(inPosition(), 1.0f)
-            val nor = model() * Vec4f(inNormal(), 0.0f)
-
-            outPosition(pos.xyz / pos.w)
-            outNormal(nor.xyz)
-            outTexture(inTexture())
-            outColor(inColor())
-        }
-    }
-
-    val defaultFragmentShader = fragmentShader {
-        val sampler = uniform<Sampler2D>()
-
-        val inPosition = input<Vec3f>()
-        val inNormal = input<Vec3f>()
-        val inTexture = input<Vec2f>()
-        val inColor = input<Vec4f>()
-
-        val sun = Vec3f(0.5f, 1.0f, 1.0f).unit
-
-        main {
-            val sampled = sampler()(inTexture())
-            val t = (sun dot inNormal()).coerceIn(0.1f, 1.0f)
-
-            color(Vec4f(sampled.xyz * t, 1.0f))
-        }
-    }
-
-    val defaultVertexLayout = VertexLayout(
-        Vec2f.SIZE_BYTES + Vec3f.SIZE_BYTES * 2 + Vec4f.SIZE_BYTES,
-        defaultVertexAttributes,
-    )
-
-    val defaultRasterizer = Rasterizer(64)
-
     val defaultPipeline = GraphicsPipeline(
-        defaultVertexShader,
-        defaultFragmentShader,
-        defaultVertexLayout,
-        defaultRasterizer,
+        DefaultVertexShaderLayout,
+        DefaultFragmentShaderLayout,
+        ::DefaultVertexShader,
+        ::DefaultFragmentShader,
+        DefaultVertexShaderLayout.layout(),
+        Rasterizer(64),
     )
 
     val cubeObjectStream = ClassLoader.getSystemResourceAsStream("cube.obj")
