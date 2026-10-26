@@ -22,9 +22,8 @@ object DefaultVertexShaderLayout : VertexShaderLayout() {
 }
 
 class DefaultVertexShader(
-    layout: DefaultVertexShaderLayout,
     context: ShaderContext,
-) : Shader<DefaultVertexShaderLayout>(layout, context) {
+) : Shader<DefaultVertexShaderLayout>(DefaultVertexShaderLayout, context) {
 
     val transform by use(layout.transform)
     val model by use(layout.model)

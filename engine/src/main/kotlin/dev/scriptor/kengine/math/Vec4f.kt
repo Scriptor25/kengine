@@ -38,6 +38,7 @@ value class Vec4f(
 
     operator fun plus(v: Vec4f): Vec4f = Vec4f(x + v.x, y + v.y, z + v.z, w + v.w)
     operator fun minus(v: Vec4f): Vec4f = Vec4f(x - v.x, y - v.y, z - v.z, w - v.w)
+    operator fun times(v: Vec4f): Vec4f = Vec4f(x * v.x, y * v.y, z * v.z, w * v.w)
     operator fun times(t: Float): Vec4f = Vec4f(x * t, y * t, z * t, w * t)
     operator fun div(t: Float): Vec4f = Vec4f(x / t, y / t, z / t, w / t)
     operator fun rem(t: Float): Vec4f = Vec4f(x % t, y % t, z % t, w % t)

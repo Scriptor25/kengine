@@ -18,9 +18,8 @@ object DefaultFragmentShaderLayout : FragmentShaderLayout() {
 }
 
 class DefaultFragmentShader(
-    layout: DefaultFragmentShaderLayout,
     context: ShaderContext,
-) : Shader<DefaultFragmentShaderLayout>(layout, context) {
+) : Shader<DefaultFragmentShaderLayout>(DefaultFragmentShaderLayout, context) {
 
     val sampler by use(layout.sampler)
 
@@ -37,6 +36,6 @@ class DefaultFragmentShader(
         val sampled = sampler(inTexture)
         val t = (sun dot inNormal.unit).coerceIn(0.1f, 1.0f)
 
-        color = Vec4f(sampled.xyz * t, 1.0f)
+        color = inColor * Vec4f(sampled.xyz * t, 1.0f)
     }
 }

@@ -285,8 +285,8 @@ interface Sampler3D {
 class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
     val vertexShaderLayout: V,
     val fragmentShaderLayout: F,
-    val vertexShaderFactory: (V, ShaderContext) -> Shader<V>,
-    val fragmentShaderFactory: (F, ShaderContext) -> Shader<F>,
+    val vertexShaderFactory: (ShaderContext) -> Shader<V>,
+    val fragmentShaderFactory: (ShaderContext) -> Shader<F>,
     val vertexLayout: VertexLayout,
     val rasterizer: Rasterizer,
     val cullMode: CullMode = CullMode.BACK,
@@ -426,7 +426,7 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
             vo,
         )
 
-        val vertexShader = vertexShaderFactory(vertexShaderLayout, vc)
+        val vertexShader = vertexShaderFactory(vc)
 
         val vertexCount = vertexBuffer.remaining() / vertexLayout.stride
         val vso: Array<Array<Any>> = Array(vertexCount) { Array(vertexShaderLayout.outputs.size) {} }
@@ -506,7 +506,7 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
                         fo,
                     )
 
-                    val fragmentShader = fragmentShaderFactory(fragmentShaderLayout, fc)
+                    val fragmentShader = fragmentShaderFactory(fc)
 
                     for (triangle in bin) {
                         rasterizer.rasterize(
