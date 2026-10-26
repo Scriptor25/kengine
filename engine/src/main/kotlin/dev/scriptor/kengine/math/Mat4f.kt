@@ -5,9 +5,31 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.tan
 
-interface Mat4fc {
+value class Mat4f(private val m: FloatArray) {
 
-    operator fun get(i: Int, j: Int): Float
+    init {
+        require(m.size == 16)
+    }
+
+    constructor() : this(1.0f)
+    constructor(s: Float) : this(
+        floatArrayOf(
+            s, 0.0f, 0.0f, 0.0f,
+            0.0f, s, 0.0f, 0.0f,
+            0.0f, 0.0f, s, 0.0f,
+            0.0f, 0.0f, 0.0f, s,
+        )
+    )
+
+    operator fun get(r: Int, c: Int): Float = m[r + c * 4]
+
+    fun toMat3f(): Mat3f = Mat3f(
+        floatArrayOf(
+            this[0, 0], this[0, 1], this[0, 2],
+            this[1, 0], this[1, 1], this[1, 2],
+            this[2, 0], this[2, 1], this[2, 2],
+        )
+    )
 
     fun transpose(): Mat4f = Mat4f(
         floatArrayOf(
@@ -18,12 +40,12 @@ interface Mat4fc {
         )
     )
 
-    operator fun times(mat: Mat4fc): Mat4f {
-        val o = Mat4f(FloatArray(16))
+    operator fun times(mat: Mat4f): Mat4f {
+        val o = FloatArray(16)
 
         for (i in 0..3) {
             for (j in 0..3) {
-                o[i, j] = 0.0f +
+                o[4, i, j] = 0.0f +
                         this[i, 0] * mat[0, j] +
                         this[i, 1] * mat[1, j] +
                         this[i, 2] * mat[2, j] +
@@ -31,7 +53,7 @@ interface Mat4fc {
             }
         }
 
-        return o
+        return Mat4f(o)
     }
 
     operator fun times(vec: Vec4f): Vec4f {
@@ -96,11 +118,14 @@ interface Mat4fc {
             x: Float,
             y: Float,
             z: Float
-        ): Mat4f = Mat4f().apply {
-            this[0, 3] = x
-            this[1, 3] = y
-            this[2, 3] = z
-        }
+        ): Mat4f = Mat4f(
+            floatArrayOf(
+                1.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, 1.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 1.0f, 0.0f,
+                x, y, z, 1.0f,
+            )
+        )
 
         fun scaling(
             x: Float,
@@ -211,28 +236,5 @@ interface Mat4fc {
                     rotationX(rotation[0]) *
                     scaling(scale[0], scale[1], scale[2])
         }
-    }
-}
-
-class Mat4f(val m: FloatArray) : Mat4fc {
-
-    init {
-        require(m.size == 16)
-    }
-
-    constructor() : this(1.0f)
-    constructor(s: Float) : this(
-        floatArrayOf(
-            s, 0.0f, 0.0f, 0.0f,
-            0.0f, s, 0.0f, 0.0f,
-            0.0f, 0.0f, s, 0.0f,
-            0.0f, 0.0f, 0.0f, s,
-        )
-    )
-
-    override fun get(i: Int, j: Int): Float = m[i + j * 4]
-
-    operator fun set(i: Int, j: Int, value: Float) {
-        m[i + j * 4] = value
     }
 }

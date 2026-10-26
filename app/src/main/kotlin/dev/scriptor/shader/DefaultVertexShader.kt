@@ -3,14 +3,12 @@ package dev.scriptor.shader
 import dev.scriptor.kengine.Shader
 import dev.scriptor.kengine.ShaderContext
 import dev.scriptor.kengine.VertexShaderLayout
-import dev.scriptor.kengine.math.Mat4fc
-import dev.scriptor.kengine.math.Vec2f
-import dev.scriptor.kengine.math.Vec3f
-import dev.scriptor.kengine.math.Vec4f
+import dev.scriptor.kengine.math.*
 
 object DefaultVertexShaderLayout : VertexShaderLayout() {
-    val transform = uniform<Mat4fc>()
-    val model = uniform<Mat4fc>()
+    val transform = uniform<Mat4f>()
+    val model = uniform<Mat4f>()
+    val normalModel = uniform<Mat3f>()
 
     val inPosition = input<Vec3f>()
     val inNormal = input<Vec3f>()
@@ -30,6 +28,7 @@ class DefaultVertexShader(
 
     val transform by use(layout.transform)
     val model by use(layout.model)
+    val normalModel by use(layout.normalModel)
 
     val inPosition by use(layout.inPosition)
     val inNormal by use(layout.inNormal)
@@ -47,10 +46,10 @@ class DefaultVertexShader(
         position = transform * Vec4f(inPosition, 1.0f)
 
         val pos = model * Vec4f(inPosition, 1.0f)
-        val nor = model * Vec4f(inNormal, 0.0f)
+        val nor = normalModel * inNormal
 
         outPosition = pos.xyz / pos.w
-        outNormal = nor.xyz
+        outNormal = nor
         outTexture = inTexture
         outColor = inColor
     }

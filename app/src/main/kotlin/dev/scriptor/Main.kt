@@ -1,7 +1,7 @@
 package dev.scriptor
 
 import dev.scriptor.kengine.*
-import dev.scriptor.kengine.math.Mat4fc
+import dev.scriptor.kengine.math.Mat4f
 import dev.scriptor.kengine.math.Vec2f
 import dev.scriptor.kengine.math.Vec3f
 import dev.scriptor.kengine.math.Vec4f
@@ -208,27 +208,29 @@ fun main() {
                 Context.allocate()
                 Context.clear()
 
-                val perspective = Mat4fc.perspective(
+                val perspective = Mat4f.perspective(
                     fovY = 70.0f,
                     aspect = Context.width.toFloat() / Context.height.toFloat(),
                     near = 0.1f,
                     far = 100.0f,
                 )
 
-                val pivot = Mat4fc.translation(-0.5f, -0.5f, -0.5f)
+                val pivot = Mat4f.translation(-0.5f, -0.5f, -0.5f)
 
-                val model1 = Mat4fc.trs(
+                val model1 = Mat4f.trs(
                     translation = Vec3f(-1.0f, 0.0f, -4.0f),
                     rotation = Vec3f(angle, angle * 0.32f, angle * 0.23f),
                     scale = Vec3f(1.0f),
                 ) * pivot
+                val normalModel1 = model1.toMat3f().inverse().transpose()
                 val transform1 = perspective * model1
 
-                val model2 = Mat4fc.trs(
+                val model2 = Mat4f.trs(
                     translation = Vec3f(1.0f, 0.0f, -4.0f),
                     rotation = Vec3f(angle * 0.43f, angle * 0.17f, angle * 0.67f),
                     scale = Vec3f(1.0f),
                 ) * pivot
+                val normalModel2 = model2.toMat3f().inverse().transpose()
                 val transform2 = perspective * model2
 
                 angle += speed
@@ -239,6 +241,7 @@ fun main() {
                     arrayOf(
                         transform1,
                         model1,
+                        normalModel1,
                     ),
                     arrayOf(
                         sampler,
@@ -250,6 +253,7 @@ fun main() {
                     arrayOf(
                         transform2,
                         model2,
+                        normalModel2,
                     ),
                     arrayOf(
                         sampler,
