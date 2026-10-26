@@ -115,12 +115,18 @@ abstract class ShaderLayout {
 
     inline fun <reified T : Any> output(): Output<T> =
         output(T::class)
+}
+
+abstract class VertexShaderLayout : ShaderLayout() {
+
+    val instance = input<Int>(-1)
+    val position = output<Vec4f>(-1)
 
     fun layout(): VertexLayout {
         val stride: Int
         val attributes = buildList {
             var offset = 0
-            for (input in inputs.sortedBy(Input<*>::location)) {
+            for (input in inputs.filter { it.id != instance.id }.sortedBy(Input<*>::location)) {
                 val format = when (input.type) {
                     Float::class -> VertexFormat.FLOAT
                     Vec2f::class -> VertexFormat.VEC2
@@ -138,11 +144,6 @@ abstract class ShaderLayout {
 
         return VertexLayout(stride, attributes)
     }
-}
-
-abstract class VertexShaderLayout : ShaderLayout() {
-
-    val position = output<Vec4f>(-1)
 }
 
 abstract class FragmentShaderLayout : ShaderLayout() {
@@ -166,6 +167,18 @@ abstract class Shader<L : ShaderLayout>(
     fun <T : Any> use(field: Uniform<T>): Delegate<T> = object : Delegate<T> {
         override fun getValue(thisRef: Any?, property: KProperty<*>): T {
             return field.type.cast(context[field.id])
+        }
+    }
+
+    fun <T : Any> use(field: Uniform<T>, index: Int): Delegate<T> = object : Delegate<T> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>): T {
+            return field.type.cast((context[field.id] as Array<*>)[index])
+        }
+    }
+
+    fun <T : Any> use(field: Uniform<T>, index: () -> Int): Delegate<T> = object : Delegate<T> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>): T {
+            return field.type.cast((context[field.id] as Array<*>)[index()])
         }
     }
 

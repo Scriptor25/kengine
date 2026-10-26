@@ -1,6 +1,6 @@
 package dev.scriptor.kengine.math
 
-value class Mat3f(private val m: FloatArray) {
+class Mat3f(private val m: FloatArray) {
 
     init {
         require(m.size == 9)

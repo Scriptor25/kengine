@@ -6,9 +6,9 @@ import dev.scriptor.kengine.VertexShaderLayout
 import dev.scriptor.kengine.math.*
 
 object DefaultVertexShaderLayout : VertexShaderLayout() {
-    val transform = uniform<Mat4f>()
-    val model = uniform<Mat4f>()
-    val normalModel = uniform<Mat3f>()
+    val transforms = uniform<Mat4f>()
+    val models = uniform<Mat4f>()
+    val normalModels = uniform<Mat3f>()
 
     val inPosition = input<Vec3f>()
     val inNormal = input<Vec3f>()
@@ -25,9 +25,11 @@ class DefaultVertexShader(
     context: ShaderContext,
 ) : Shader<DefaultVertexShaderLayout>(DefaultVertexShaderLayout, context) {
 
-    val transform by use(layout.transform)
-    val model by use(layout.model)
-    val normalModel by use(layout.normalModel)
+    val instance by use(layout.instance)
+
+    val transform by use(layout.transforms, ::instance)
+    val model by use(layout.models, ::instance)
+    val normalModel by use(layout.normalModels, ::instance)
 
     val inPosition by use(layout.inPosition)
     val inNormal by use(layout.inNormal)

@@ -29,6 +29,7 @@ value class Vec4i(
 
     operator fun plus(v: Vec4i): Vec4i = Vec4i(x + v.x, y + v.y, z + v.z, w + v.w)
     operator fun minus(v: Vec4i): Vec4i = Vec4i(x - v.x, y - v.y, z - v.z, w - v.w)
+    operator fun times(v: Vec4i): Vec4i = Vec4i(x * v.x, y * v.y, z * v.z, w * v.w)
     operator fun times(t: Int): Vec4i = Vec4i(x * t, y * t, z * t, w * t)
     operator fun div(t: Int): Vec4i = Vec4i(x / t, y / t, z / t, w / t)
     operator fun rem(t: Int): Vec4i = Vec4i(x % t, y % t, z % t, w % t)

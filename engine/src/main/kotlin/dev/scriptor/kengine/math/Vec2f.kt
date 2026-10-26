@@ -26,6 +26,7 @@ value class Vec2f(
 
     operator fun plus(v: Vec2f): Vec2f = Vec2f(x + v.x, y + v.y)
     operator fun minus(v: Vec2f): Vec2f = Vec2f(x - v.x, y - v.y)
+    operator fun times(v: Vec2f): Vec2f = Vec2f(x * v.x, y * v.y)
     operator fun times(t: Float): Vec2f = Vec2f(x * t, y * t)
     operator fun div(t: Float): Vec2f = Vec2f(x / t, y / t)
     operator fun rem(t: Float): Vec2f = Vec2f(x % t, y % t)

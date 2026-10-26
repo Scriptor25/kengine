@@ -110,10 +110,10 @@ data class VertexLayout(
     fun fetch(
         buffer: ByteBuffer,
         offset: Int,
-        inputs: Array<Any>,
+        values: Array<Any>,
     ) {
         for (attribute in attributes) {
-            inputs[attribute.input.id.index] = attribute.format.get(buffer, offset + attribute.offset)
+            values[attribute.input.id.index] = attribute.format.get(buffer, offset + attribute.offset)
         }
     }
 }
@@ -395,8 +395,8 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
     operator fun invoke(
         surface: Surface,
         mesh: Mesh,
-        vertexUniforms: Array<Any> = emptyArray(),
-        fragmentUniforms: Array<Any> = emptyArray(),
+        vertexUniformValues: Array<Any> = emptyArray(),
+        fragmentUniformValues: Array<Any> = emptyArray(),
     ) {
         invoke(
             surface,
@@ -404,8 +404,29 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
             mesh.elementBuffer,
             0,
             mesh.count,
-            vertexUniforms,
-            fragmentUniforms,
+            vertexUniformValues,
+            fragmentUniformValues,
+        )
+    }
+
+    operator fun invoke(
+        surface: Surface,
+        mesh: Mesh,
+        firstInstance: Int,
+        instanceCount: Int,
+        vertexUniformValues: Array<Any> = emptyArray(),
+        fragmentUniformValues: Array<Any> = emptyArray(),
+    ) {
+        invoke(
+            surface,
+            mesh.vertexBuffer,
+            mesh.elementBuffer,
+            0,
+            mesh.count,
+            firstInstance,
+            instanceCount,
+            vertexUniformValues,
+            fragmentUniformValues,
         )
     }
 
@@ -413,71 +434,103 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
         surface: Surface,
         vertexBuffer: ByteBuffer,
         elementBuffer: ByteBuffer,
-        first: Int,
-        count: Int,
-        vertexUniforms: Array<Any> = emptyArray(),
-        fragmentUniforms: Array<Any> = emptyArray(),
+        firstElement: Int,
+        elementCount: Int,
+        vertexUniformValues: Array<Any> = emptyArray(),
+        fragmentUniformValues: Array<Any> = emptyArray(),
     ) {
-        val vi: Array<Any> = Array(vertexShaderLayout.inputs.size) {}
-        val vo: Array<Any> = Array(vertexShaderLayout.outputs.size) {}
-        val vc = RuntimeShaderContext(
-            vertexUniforms,
-            vi,
-            vo,
+        invoke(
+            surface,
+            vertexBuffer,
+            elementBuffer,
+            firstElement,
+            elementCount,
+            0,
+            1,
+            vertexUniformValues,
+            fragmentUniformValues,
+        )
+    }
+
+    operator fun invoke(
+        surface: Surface,
+        vertexBuffer: ByteBuffer,
+        elementBuffer: ByteBuffer,
+        firstElement: Int,
+        elementCount: Int,
+        firstInstance: Int,
+        instanceCount: Int,
+        vertexUniformValues: Array<Any> = emptyArray(),
+        fragmentUniformValues: Array<Any> = emptyArray(),
+    ) {
+        val vertexInputValues: Array<Any> = Array(vertexShaderLayout.inputs.size) {}
+        val vertexOutputValues: Array<Any> = Array(vertexShaderLayout.outputs.size) {}
+        val vertexShaderContext = RuntimeShaderContext(
+            vertexUniformValues,
+            vertexInputValues,
+            vertexOutputValues,
         )
 
-        val vertexShader = vertexShaderFactory(vc)
+        val vertexShader = vertexShaderFactory(vertexShaderContext)
 
         val vertexCount = vertexBuffer.remaining() / vertexLayout.stride
-        val vso: Array<Array<Any>> = Array(vertexCount) { Array(vertexShaderLayout.outputs.size) {} }
-
-        for (i in 0 until vertexCount) {
-            vi.fill(Unit)
-            vo.fill(Unit)
-
-            vertexLayout.fetch(vertexBuffer, vertexBuffer.position() + i * vertexLayout.stride, vi)
-
-            context(vc) { vertexShader.main() }
-
-            vo.copyInto(vso[i])
-        }
+        val vertexShaderOutput: Array<Array<Any>> = Array(vertexCount) { Array(vertexShaderLayout.outputs.size) {} }
 
         val tilesX = (surface.width + rasterizer.tileSize - 1) / rasterizer.tileSize
         val tilesY = (surface.height + rasterizer.tileSize - 1) / rasterizer.tileSize
 
         val bins = Array(tilesX * tilesY) { mutableListOf<RasterTriangle>() }
 
-        for (index in first until first + count step 3) {
-            val i0 = elementBuffer.getInt(Int.SIZE_BYTES * (index + 0))
-            val i1 = elementBuffer.getInt(Int.SIZE_BYTES * (index + 1))
-            val i2 = elementBuffer.getInt(Int.SIZE_BYTES * (index + 2))
+        for (instance in firstInstance until firstInstance + instanceCount) {
+            for (vertex in 0 until vertexCount) {
+                vertexInputValues.fill(Unit)
+                vertexOutputValues.fill(Unit)
 
-            val triangle = clipVertexTriangle(
-                vso[i0],
-                vso[i1],
-                vso[i2],
-            )
+                vertexInputValues[vertexShaderLayout.instance.id.index] = instance
 
-            if (triangle.size < 3)
-                continue
+                vertexLayout.fetch(
+                    vertexBuffer,
+                    vertexBuffer.position() + vertex * vertexLayout.stride,
+                    vertexInputValues,
+                )
 
-            for (i in 1 until triangle.lastIndex) {
-                val prepared = prepareTriangle(
-                    triangle[0],
-                    triangle[i],
-                    triangle[i + 1],
-                    surface.width,
-                    surface.height,
-                ) ?: continue
+                vertexShader.main()
 
-                val tx0 = prepared.minX / rasterizer.tileSize
-                val ty0 = prepared.minY / rasterizer.tileSize
-                val tx1 = prepared.maxX / rasterizer.tileSize
-                val ty1 = prepared.maxY / rasterizer.tileSize
+                vertexOutputValues.copyInto(vertexShaderOutput[vertex])
+            }
 
-                for (ty in ty0..ty1) {
-                    for (tx in tx0..tx1) {
-                        bins[tx + ty * tilesX] += prepared
+            for (index in firstElement until firstElement + elementCount step 3) {
+                val index0 = elementBuffer.getInt(Int.SIZE_BYTES * (index + 0))
+                val index1 = elementBuffer.getInt(Int.SIZE_BYTES * (index + 1))
+                val index2 = elementBuffer.getInt(Int.SIZE_BYTES * (index + 2))
+
+                val triangle = clipVertexTriangle(
+                    vertexShaderOutput[index0],
+                    vertexShaderOutput[index1],
+                    vertexShaderOutput[index2],
+                )
+
+                if (triangle.size < 3)
+                    continue
+
+                for (i in 1 until triangle.lastIndex) {
+                    val prepared = prepareTriangle(
+                        triangle[0],
+                        triangle[i],
+                        triangle[i + 1],
+                        surface.width,
+                        surface.height,
+                    ) ?: continue
+
+                    val tx0 = prepared.minX / rasterizer.tileSize
+                    val ty0 = prepared.minY / rasterizer.tileSize
+                    val tx1 = prepared.maxX / rasterizer.tileSize
+                    val ty1 = prepared.maxY / rasterizer.tileSize
+
+                    for (ty in ty0..ty1) {
+                        for (tx in tx0..tx1) {
+                            bins[tx + ty * tilesX] += prepared
+                        }
                     }
                 }
             }
@@ -498,15 +551,15 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
                 val tileMaxY = minOf(tileMinY + rasterizer.tileSize - 1, surface.height - 1)
 
                 tasks += Callable {
-                    val fi: Array<Any> = Array(fragmentShaderLayout.inputs.size) {}
-                    val fo: Array<Any> = Array(fragmentShaderLayout.outputs.size) {}
-                    val fc = RuntimeShaderContext(
-                        fragmentUniforms,
-                        fi,
-                        fo,
+                    val fragmentInputValues: Array<Any> = Array(fragmentShaderLayout.inputs.size) {}
+                    val fragmentOutputValues: Array<Any> = Array(fragmentShaderLayout.outputs.size) {}
+                    val fragmentShaderContext = RuntimeShaderContext(
+                        fragmentUniformValues,
+                        fragmentInputValues,
+                        fragmentOutputValues,
                     )
 
-                    val fragmentShader = fragmentShaderFactory(fc)
+                    val fragmentShader = fragmentShaderFactory(fragmentShaderContext)
 
                     for (triangle in bin) {
                         rasterizer.rasterize(
@@ -524,13 +577,13 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
                             if (depth < depthBuffer) {
                                 val weights = fragment.perspectiveWeights()
 
-                                fi.fill(Unit)
-                                fo.fill(Unit)
+                                fragmentInputValues.fill(Unit)
+                                fragmentOutputValues.fill(Unit)
 
                                 for (varyingIndex in varyings.indices) {
                                     val varying = varyings[varyingIndex]
 
-                                    fi[varying.fragmentInput.id.index] =
+                                    fragmentInputValues[varying.fragmentInput.id.index] =
                                         (varying.interpolator as Interpolator<Any>)(
                                             triangle.v0.varyings[varyingIndex],
                                             weights.first,
@@ -541,11 +594,9 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
                                         )
                                 }
 
-                                context(fc) {
-                                    fragmentShader.main()
-                                }
+                                fragmentShader.main()
 
-                                val color = fo[fragmentShaderLayout.color.id.index] as? Vec4f
+                                val color = fragmentOutputValues[fragmentShaderLayout.color.id.index] as? Vec4f
                                     ?: error("no fragment shader output")
 
                                 val r = (color.x.coerceIn(0.0f, 1.0f) * 255.999f).toInt() and 0xff

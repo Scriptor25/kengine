@@ -20,6 +20,7 @@ value class Vec2i(
 
     operator fun plus(v: Vec2i): Vec2i = Vec2i(x + v.x, y + v.y)
     operator fun minus(v: Vec2i): Vec2i = Vec2i(x - v.x, y - v.y)
+    operator fun times(v: Vec2i): Vec2i = Vec2i(x * v.x, y * v.y)
     operator fun times(t: Int): Vec2i = Vec2i(x * t, y * t)
     operator fun div(t: Int): Vec2i = Vec2i(x / t, y / t)
     operator fun rem(t: Int): Vec2i = Vec2i(x % t, y % t)

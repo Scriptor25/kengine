@@ -25,6 +25,7 @@ value class Vec3i(
 
     operator fun plus(v: Vec3i): Vec3i = Vec3i(x + v.x, y + v.y, z + v.z)
     operator fun minus(v: Vec3i): Vec3i = Vec3i(x - v.x, y - v.y, z - v.z)
+    operator fun times(v: Vec3i): Vec3i = Vec3i(x * v.x, y * v.y, z * v.z)
     operator fun times(t: Int): Vec3i = Vec3i(x * t, y * t, z * t)
     operator fun div(t: Int): Vec3i = Vec3i(x / t, y / t, z / t)
     operator fun rem(t: Int): Vec3i = Vec3i(x % t, y % t, z % t)

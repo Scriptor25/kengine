@@ -35,6 +35,7 @@ value class Vec3f(
 
     operator fun plus(v: Vec3f): Vec3f = Vec3f(x + v.x, y + v.y, z + v.z)
     operator fun minus(v: Vec3f): Vec3f = Vec3f(x - v.x, y - v.y, z - v.z)
+    operator fun times(v: Vec3f): Vec3f = Vec3f(x * v.x, y * v.y, z * v.z)
     operator fun times(t: Float): Vec3f = Vec3f(x * t, y * t, z * t)
     operator fun div(t: Float): Vec3f = Vec3f(x / t, y / t, z / t)
     operator fun rem(t: Float): Vec3f = Vec3f(x % t, y % t, z % t)

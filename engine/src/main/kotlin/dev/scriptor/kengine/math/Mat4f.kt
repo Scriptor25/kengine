@@ -5,7 +5,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.tan
 
-value class Mat4f(private val m: FloatArray) {
+class Mat4f(private val m: FloatArray) {
 
     init {
         require(m.size == 16)

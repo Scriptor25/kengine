@@ -125,13 +125,14 @@ fun main() {
 
     val particles = buildList {
         for (i in 0..100) {
-            val dx = Math.random().toFloat() * 2.0f - 1.0f
-            val dy = Math.random().toFloat() * 2.0f - 1.0f
+            val vx = Math.random().toFloat() * 2.0f - 1.0f
+            val vy = Math.random().toFloat() * 2.0f - 1.0f
+            val vz = Math.random().toFloat() * 2.0f - 1.0f
 
             add(
                 Particle(
-                    Vec3f(0.0f, 0.0f, Math.random().toFloat()),
-                    Vec3f(dx, dy, 0.0f),
+                    Vec3f(0.0f, 0.0f, 0.0f),
+                    Vec3f(vx, vy, vz),
                 )
             )
         }
@@ -190,6 +191,13 @@ fun main() {
         }
     }
 
+    val transforms: Array<Any> = Array(2 + particles.size) {}
+    val models: Array<Any> = Array(2 + particles.size) {}
+    val normalModels: Array<Any> = Array(2 + particles.size) {}
+
+    val vertexUniformValues: Array<Any> = arrayOf(transforms, models, normalModels)
+    val fragmentUniformValues: Array<Any> = arrayOf(sampler)
+
     thread = Thread {
         canvas.createBufferStrategy(2)
 
@@ -217,72 +225,86 @@ fun main() {
 
                 val pivot = Mat4f.translation(-0.5f, -0.5f, -0.5f)
 
-                val model1 = Mat4f.trs(
-                    translation = Vec3f(-1.0f, 0.0f, -4.0f),
-                    rotation = Vec3f(angle, angle * 0.32f, angle * 0.23f),
-                    scale = Vec3f(1.0f),
-                ) * pivot
-                val normalModel1 = model1.toMat3f().inverse().transpose()
-                val transform1 = perspective * model1
+                run {
+                    val model = Mat4f.trs(
+                        translation = Vec3f(-1.0f, 0.0f, -4.0f),
+                        rotation = Vec3f(angle, angle * 0.32f, angle * 0.23f),
+                        scale = Vec3f(1.0f),
+                    ) * pivot
+                    val normalModel = model.toMat3f().inverse().transpose()
+                    val transform = perspective * model
 
-                val model2 = Mat4f.trs(
-                    translation = Vec3f(1.0f, 0.0f, -4.0f),
-                    rotation = Vec3f(angle * 0.43f, angle * 0.17f, angle * 0.67f),
-                    scale = Vec3f(1.0f),
-                ) * pivot
-                val normalModel2 = model2.toMat3f().inverse().transpose()
-                val transform2 = perspective * model2
+                    transforms[0] = transform
+                    models[0] = model
+                    normalModels[0] = normalModel
+                }
+
+                run {
+                    val model = Mat4f.trs(
+                        translation = Vec3f(1.0f, 0.0f, -4.0f),
+                        rotation = Vec3f(angle * 0.43f, angle * 0.17f, angle * 0.67f),
+                        scale = Vec3f(1.0f),
+                    ) * pivot
+                    val normalModel = model.toMat3f().inverse().transpose()
+                    val transform = perspective * model
+
+                    transforms[1] = transform
+                    models[1] = model
+                    normalModels[1] = normalModel
+                }
 
                 angle += speed
 
-                defaultPipeline(
-                    surface,
-                    cubeMesh,
-                    arrayOf(
-                        transform1,
-                        model1,
-                        normalModel1,
-                    ),
-                    arrayOf(
-                        sampler,
-                    ),
-                )
-                defaultPipeline(
-                    surface,
-                    cubeMesh,
-                    arrayOf(
-                        transform2,
-                        model2,
-                        normalModel2,
-                    ),
-                    arrayOf(
-                        sampler,
-                    ),
-                )
+                for ([index, particle] in particles.withIndex()) {
+                    val model = Mat4f.trs(
+                        translation = Vec3f(particle.p.x, particle.p.y, particle.p.z - 4.0f),
+                        rotation = Vec3f(angle * particle.v.x, angle * particle.v.y, angle * particle.v.z),
+                        scale = Vec3f(0.1f),
+                    ) * pivot
+                    val normalModel = model.toMat3f().inverse().transpose()
+                    val transform = perspective * model
 
-                for (particle in particles) {
-                    particle // TODO: draw(...)
+                    transforms[2 + index] = transform
+                    models[2 + index] = model
+                    normalModels[2 + index] = normalModel
                 }
+
+                defaultPipeline(
+                    surface,
+                    cubeMesh,
+                    0,
+                    particles.size,
+                    vertexUniformValues,
+                    fragmentUniformValues,
+                )
             }
 
             for (particle in particles) {
-                if (particle.p.x > Context.width) {
-                    particle.p = Vec3f(Context.width.toFloat(), particle.p.y, particle.p.z)
+                if (particle.p.x > 2.0f) {
+                    particle.p = Vec3f(2.0f, particle.p.y, particle.p.z)
                     particle.v = Vec3f(-particle.v.x.absoluteValue, particle.v.y, particle.v.z)
-                } else if (particle.p.x < 0) {
-                    particle.p = Vec3f(0.0f, particle.p.y, particle.p.z)
+                } else if (particle.p.x < -2.0f) {
+                    particle.p = Vec3f(-2.0f, particle.p.y, particle.p.z)
                     particle.v = Vec3f(particle.v.x.absoluteValue, particle.v.y, particle.v.z)
                 }
 
-                if (particle.p.y > Context.height) {
-                    particle.p = Vec3f(particle.p.x, Context.height.toFloat(), particle.p.z)
+                if (particle.p.y > 2.0f) {
+                    particle.p = Vec3f(particle.p.x, 2.0f, particle.p.z)
                     particle.v = Vec3f(particle.v.x, -particle.v.y.absoluteValue, particle.v.z)
-                } else if (particle.p.y < 0) {
-                    particle.p = Vec3f(particle.p.x, 0.0f, particle.p.z)
+                } else if (particle.p.y < -2.0f) {
+                    particle.p = Vec3f(particle.p.x, -2.0f, particle.p.z)
                     particle.v = Vec3f(particle.v.x, particle.v.y.absoluteValue, particle.v.z)
                 }
 
-                particle.p += particle.v * speed
+                if (particle.p.z > 2.0f) {
+                    particle.p = Vec3f(particle.p.x, particle.p.y, 2.0f)
+                    particle.v = Vec3f(particle.v.x, particle.v.y, -particle.v.z.absoluteValue)
+                } else if (particle.p.z < -2.0f) {
+                    particle.p = Vec3f(particle.p.x, particle.p.y, -2.0f)
+                    particle.v = Vec3f(particle.v.x, particle.v.y, particle.v.z.absoluteValue)
+                }
+
+                particle.p += particle.v * speed * 0.02f
             }
 
             do {
