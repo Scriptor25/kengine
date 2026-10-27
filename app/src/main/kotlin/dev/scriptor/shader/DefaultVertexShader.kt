@@ -1,9 +1,9 @@
 package dev.scriptor.shader
 
-import dev.scriptor.kengine.Shader
-import dev.scriptor.kengine.ShaderContext
-import dev.scriptor.kengine.VertexShaderLayout
 import dev.scriptor.kengine.math.*
+import dev.scriptor.kengine.pipeline.Shader
+import dev.scriptor.kengine.pipeline.ShaderContext
+import dev.scriptor.kengine.pipeline.VertexShaderLayout
 
 object DefaultVertexShaderLayout : VertexShaderLayout() {
     val transforms = uniform<Mat4f>()

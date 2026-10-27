@@ -1,12 +1,12 @@
 package dev.scriptor.shader
 
-import dev.scriptor.kengine.FragmentShaderLayout
-import dev.scriptor.kengine.Sampler2D
-import dev.scriptor.kengine.Shader
-import dev.scriptor.kengine.ShaderContext
 import dev.scriptor.kengine.math.Vec2f
 import dev.scriptor.kengine.math.Vec3f
 import dev.scriptor.kengine.math.Vec4f
+import dev.scriptor.kengine.pipeline.FragmentShaderLayout
+import dev.scriptor.kengine.pipeline.Sampler2D
+import dev.scriptor.kengine.pipeline.Shader
+import dev.scriptor.kengine.pipeline.ShaderContext
 
 object DefaultFragmentShaderLayout : FragmentShaderLayout() {
     val sampler = uniform<Sampler2D>()

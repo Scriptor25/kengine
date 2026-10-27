@@ -1,29 +1,31 @@
-package dev.scriptor.kengine
+package dev.scriptor.kengine.pipeline
 
-import dev.scriptor.kengine.math.*
+import dev.scriptor.kengine.Mesh
+import dev.scriptor.kengine.math.Vec2f
+import dev.scriptor.kengine.math.Vec3f
+import dev.scriptor.kengine.math.Vec4f
 import java.nio.ByteBuffer
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.math.ceil
 import kotlin.math.floor
-import kotlin.reflect.KClass
 
-interface Surface {
-    val width: Int
-    val height: Int
-
-    fun color(index: Int): Int
-    fun color(index: Int, value: Int)
-
-    fun depth(index: Int): Float
-    fun depth(index: Int, value: Float)
+private interface Interpolator<T : Any> {
+    operator fun invoke(a: T, b: T, t: Float): T
+    operator fun invoke(a: T, wa: Float, b: T, wb: Float, c: T, wc: Float): T
 }
 
-private class RuntimeShaderContext(
-    private val uniformValues: Array<Any>,
-    private val inputValues: Array<Any>,
-    private val outputValues: Array<Any>,
+private data class Varying<T : Any>(
+    val vertexOutput: Output<T>,
+    val fragmentInput: Input<T>,
+    val interpolator: Interpolator<T>,
+)
+
+private class ShaderContextImpl(
+    val uniformValues: Array<Any>,
+    val inputValues: Array<Any>,
+    val outputValues: Array<Any>,
 ) : ShaderContext {
 
     override fun get(id: UniformId): Any {
@@ -41,245 +43,6 @@ private class RuntimeShaderContext(
     override fun set(id: OutputId, value: Any) {
         outputValues[id.index] = value
     }
-}
-
-sealed interface VertexFormat<T : Any> {
-
-    val type: KClass<T>
-    val size: Int
-
-    fun get(buffer: ByteBuffer, offset: Int): T
-
-    data object FLOAT : VertexFormat<Float> {
-        override val type: KClass<Float> = Float::class
-        override val size: Int = Float.SIZE_BYTES
-
-        override fun get(buffer: ByteBuffer, offset: Int): Float {
-            return buffer.getFloat(offset)
-        }
-    }
-
-    data object VEC2 : VertexFormat<Vec2f> {
-        override val type: KClass<Vec2f> = Vec2f::class
-        override val size: Int = Vec2f.SIZE_BYTES
-
-        override fun get(buffer: ByteBuffer, offset: Int): Vec2f {
-            return buffer.getVec2f(offset)
-        }
-    }
-
-    data object VEC3 : VertexFormat<Vec3f> {
-        override val type: KClass<Vec3f> = Vec3f::class
-        override val size: Int = Vec3f.SIZE_BYTES
-
-        override fun get(buffer: ByteBuffer, offset: Int): Vec3f {
-            return buffer.getVec3f(offset)
-        }
-    }
-
-    data object VEC4 : VertexFormat<Vec4f> {
-        override val type: KClass<Vec4f> = Vec4f::class
-        override val size: Int = Vec4f.SIZE_BYTES
-
-        override fun get(buffer: ByteBuffer, offset: Int): Vec4f {
-            return buffer.getVec4f(offset)
-        }
-    }
-}
-
-data class VertexAttribute<T : Any>(
-    val input: Input<T>,
-    val format: VertexFormat<T>,
-    val offset: Int,
-)
-
-data class VertexLayout(
-    val stride: Int,
-    val attributes: List<VertexAttribute<*>>,
-) {
-    init {
-        require(stride > 0)
-
-        for (attribute in attributes) {
-            require(attribute.offset >= 0)
-            require(attribute.offset + attribute.format.size <= stride)
-            require(attribute.input.type == attribute.format.type)
-        }
-    }
-
-    fun fetch(
-        buffer: ByteBuffer,
-        offset: Int,
-        values: Array<Any>,
-    ) {
-        for (attribute in attributes) {
-            values[attribute.input.id.index] = attribute.format.get(buffer, offset + attribute.offset)
-        }
-    }
-}
-
-class ClipVertex(
-    val position: Vec4f,
-    val varyings: Array<Any>,
-)
-
-class ScreenVertex(
-    val x: Float,
-    val y: Float,
-    val depth: Float,
-    val invW: Float,
-    val varyings: Array<Any>,
-)
-
-data class RasterTriangle(
-    val v0: ScreenVertex,
-    val v1: ScreenVertex,
-    val v2: ScreenVertex,
-
-    val area: Float,
-
-    val minX: Int,
-    val minY: Int,
-    val maxX: Int,
-    val maxY: Int,
-)
-
-data class RasterFragment(
-    val x: Int,
-    val y: Int,
-    val depth: Float,
-    val b0: Float,
-    val b1: Float,
-    val b2: Float,
-    val invW0: Float,
-    val invW1: Float,
-    val invW2: Float,
-) {
-    fun perspectiveWeights(): Triple<Float, Float, Float> {
-        val w0 = b0 * invW0
-        val w1 = b1 * invW1
-        val w2 = b2 * invW2
-
-        val inv = 1.0f / (w0 + w1 + w2)
-
-        return Triple(w0 * inv, w1 * inv, w2 * inv)
-    }
-}
-
-class Rasterizer(
-    val tileSize: Int,
-) {
-    init {
-        require(tileSize > 0)
-    }
-
-    fun rasterize(
-        triangle: RasterTriangle,
-        clipMinX: Int,
-        clipMinY: Int,
-        clipMaxX: Int,
-        clipMaxY: Int,
-        emit: (RasterFragment) -> Unit,
-    ) {
-        val minX = maxOf(triangle.minX, clipMinX)
-        val minY = maxOf(triangle.minY, clipMinY)
-        val maxX = minOf(triangle.maxX, clipMaxX)
-        val maxY = minOf(triangle.maxY, clipMaxY)
-
-        if (minX > maxX || minY > maxY)
-            return
-
-        fun edge(
-            a: ScreenVertex,
-            b: ScreenVertex,
-            x: Float,
-            y: Float,
-        ): Float = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x)
-
-        fun isTopLeft(a: ScreenVertex, b: ScreenVertex): Boolean {
-            val dx = b.x - a.x
-            val dy = b.y - a.y
-            return dy < 0.0f || (dy == 0.0f && dx > 0.0f)
-        }
-
-        fun inside(value: Float, inclusive: Boolean): Boolean =
-            value > 0.0f || (value == 0.0f && inclusive)
-
-        val inclusive0 = isTopLeft(triangle.v1, triangle.v2)
-        val inclusive1 = isTopLeft(triangle.v2, triangle.v0)
-        val inclusive2 = isTopLeft(triangle.v0, triangle.v1)
-
-        val inverseArea = 1.0f / triangle.area
-
-        for (y in minY..maxY) {
-            val py = y + 0.5f
-
-            for (x in minX..maxX) {
-                val px = x + 0.5f
-
-                val e0 = edge(triangle.v1, triangle.v2, px, py)
-                val e1 = edge(triangle.v2, triangle.v0, px, py)
-                val e2 = edge(triangle.v0, triangle.v1, px, py)
-
-                if (
-                    inside(e0, inclusive0) &&
-                    inside(e1, inclusive1) &&
-                    inside(e2, inclusive2)
-                ) {
-                    val b0 = e0 * inverseArea
-                    val b1 = e1 * inverseArea
-                    val b2 = e2 * inverseArea
-
-                    val depth = (b0 * triangle.v0.depth + b1 * triangle.v1.depth + b2 * triangle.v2.depth)
-                        .coerceIn(0.0f, 1.0f)
-
-                    emit(
-                        RasterFragment(
-                            x, y,
-                            depth,
-                            b0, b1, b2,
-                            triangle.v0.invW,
-                            triangle.v1.invW,
-                            triangle.v2.invW,
-                        )
-                    )
-                }
-            }
-        }
-    }
-}
-
-interface Interpolator<T : Any> {
-    operator fun invoke(a: T, b: T, t: Float): T
-    operator fun invoke(a: T, wa: Float, b: T, wb: Float, c: T, wc: Float): T
-}
-
-data class Varying<T : Any>(
-    val vertexOutput: Output<T>,
-    val fragmentInput: Input<T>,
-    val interpolator: Interpolator<T>,
-)
-
-enum class CullMode {
-    NONE,
-    FRONT,
-    BACK,
-    FRONT_AND_BACK,
-}
-
-interface Sampler1D {
-
-    operator fun invoke(x: Float): Vec4f
-}
-
-interface Sampler2D {
-
-    operator fun invoke(xy: Vec2f): Vec4f
-}
-
-interface Sampler3D {
-
-    operator fun invoke(xyz: Vec3f): Vec4f
 }
 
 class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
@@ -465,7 +228,7 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
     ) {
         val vertexInputValues: Array<Any> = Array(vertexShaderLayout.inputs.size) {}
         val vertexOutputValues: Array<Any> = Array(vertexShaderLayout.outputs.size) {}
-        val vertexShaderContext = RuntimeShaderContext(
+        val vertexShaderContext = ShaderContextImpl(
             vertexUniformValues,
             vertexInputValues,
             vertexOutputValues,
@@ -553,7 +316,7 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
                 tasks += Callable {
                     val fragmentInputValues: Array<Any> = Array(fragmentShaderLayout.inputs.size) {}
                     val fragmentOutputValues: Array<Any> = Array(fragmentShaderLayout.outputs.size) {}
-                    val fragmentShaderContext = RuntimeShaderContext(
+                    val fragmentShaderContext = ShaderContextImpl(
                         fragmentUniformValues,
                         fragmentInputValues,
                         fragmentOutputValues,

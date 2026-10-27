@@ -1,0 +1,49 @@
+package dev.scriptor.kengine.pipeline
+
+import dev.scriptor.kengine.math.Vec4f
+
+internal class ClipVertex(
+    val position: Vec4f,
+    val varyings: Array<Any>,
+)
+
+internal class ScreenVertex(
+    val x: Float,
+    val y: Float,
+    val depth: Float,
+    val invW: Float,
+    val varyings: Array<Any>,
+)
+
+internal data class RasterTriangle(
+    val v0: ScreenVertex,
+    val v1: ScreenVertex,
+    val v2: ScreenVertex,
+    val area: Float,
+    val minX: Int,
+    val minY: Int,
+    val maxX: Int,
+    val maxY: Int,
+)
+
+internal data class RasterFragment(
+    val x: Int,
+    val y: Int,
+    val depth: Float,
+    val b0: Float,
+    val b1: Float,
+    val b2: Float,
+    val invW0: Float,
+    val invW1: Float,
+    val invW2: Float,
+) {
+    fun perspectiveWeights(): Triple<Float, Float, Float> {
+        val w0 = b0 * invW0
+        val w1 = b1 * invW1
+        val w2 = b2 * invW2
+
+        val inv = 1.0f / (w0 + w1 + w2)
+
+        return Triple(w0 * inv, w1 * inv, w2 * inv)
+    }
+}

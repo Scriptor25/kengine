@@ -1,10 +1,15 @@
 package dev.scriptor
 
-import dev.scriptor.kengine.*
+import dev.scriptor.kengine.KWindow
+import dev.scriptor.kengine.ObjectFile
 import dev.scriptor.kengine.math.Mat4f
 import dev.scriptor.kengine.math.Vec2f
 import dev.scriptor.kengine.math.Vec3f
 import dev.scriptor.kengine.math.Vec4f
+import dev.scriptor.kengine.pipeline.GraphicsPipeline
+import dev.scriptor.kengine.pipeline.Rasterizer
+import dev.scriptor.kengine.pipeline.Sampler2D
+import dev.scriptor.kengine.pipeline.Surface
 import dev.scriptor.shader.DefaultFragmentShader
 import dev.scriptor.shader.DefaultFragmentShaderLayout
 import dev.scriptor.shader.DefaultVertexShader
