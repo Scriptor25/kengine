@@ -44,6 +44,7 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
         Runtime.getRuntime().availableProcessors().coerceAtLeast(1),
         Thread.ofPlatform().daemon().factory(),
     ),
+    val visualizeBins: Boolean = false,
 ) {
     val varyings = varyings(
         vertexShaderLayout,
@@ -205,6 +206,7 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
         val tilesY = (surface.height + rasterizer.tileSize - 1) / rasterizer.tileSize
 
         val bins = Array(tilesX * tilesY) { mutableListOf<RasterTriangle>() }
+        var maxSize = 0
 
         for (instance in firstInstance until firstInstance + instanceCount) {
             for (vertex in 0 until vertexCount) {
@@ -256,7 +258,9 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
 
                     for (ty in ty0..ty1) {
                         for (tx in tx0..tx1) {
-                            bins[tx + ty * tilesX] += prepared
+                            val bin = bins[tx + ty * tilesX]
+                            bin += prepared
+                            maxSize = maxOf(maxSize, bin.size)
                         }
                     }
                 }
@@ -278,6 +282,14 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
                 val tileMaxY = minOf(tileMinY + rasterizer.tileSize - 1, surface.height - 1)
 
                 tasks += Callable {
+                    if (visualizeBins) {
+                        val ratio = bin.size.toFloat() / maxSize.toFloat()
+                        val cr = (ratio * 255.999f).toInt() and 0xff
+                        val cg = ((1.0f - ratio) * 255.999f).toInt() and 0xff
+
+                        surface.fill(tileMinX, tileMinY, tileMaxX, tileMaxY, (0xff shl 24) or (cr shl 16) or (cg shl 8))
+                    }
+
                     val fragmentInputValues: Array<Any> = Array(fragmentShaderLayout.inputs.size) {}
                     val fragmentOutputValues: Array<Any> = Array(fragmentShaderLayout.outputs.size) {}
                     val fragmentShaderContext = ShaderContextImpl(

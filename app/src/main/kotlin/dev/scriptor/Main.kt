@@ -22,7 +22,6 @@ import java.awt.event.ComponentEvent
 import java.awt.event.KeyEvent
 import java.awt.image.BufferedImage
 import java.awt.image.DataBufferInt
-import java.util.concurrent.locks.LockSupport
 import javax.imageio.ImageIO
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
@@ -32,7 +31,7 @@ object Context {
     @OptIn(ExperimentalAtomicApi::class)
     val running = AtomicBoolean(true)
 
-    const val SCALE = 4
+    const val SCALE = 2
 
     var width: Int = 0
     var height: Int = 0
@@ -111,6 +110,16 @@ fun main() {
         override val height: Int
             get() = Context.scaledHeight
 
+        override fun fill(minX: Int, minY: Int, maxX: Int, maxY: Int, value: Int) {
+            for (y in minY..maxY) {
+                val base = y * width
+                val from = base + minX
+                val to = base + maxX
+
+                Context.color.fill(value, from, to + 1)
+            }
+        }
+
         override fun color(index: Int): Int {
             return Context.color[index]
         }
@@ -152,7 +161,7 @@ fun main() {
         ::DefaultVertexShader,
         ::DefaultFragmentShader,
         DefaultVertexShaderLayout.layout(),
-        Rasterizer(64),
+        Rasterizer(32),
     )
 
     val cubeObjectStream = ClassLoader.getSystemResourceAsStream("cube.obj")
@@ -176,12 +185,7 @@ fun main() {
         vertices += 1.0f
     }
 
-    val targetFrame = 60
-    val targetFrameNano = 1_000_000_000L / targetFrame
-    val fixedDelta = 1.0f / targetFrame.toFloat()
-
     var time = System.nanoTime()
-    var accumulator = 0.0
 
     var angle = 0.0f
 
@@ -217,54 +221,43 @@ fun main() {
         val strategy = canvas.bufferStrategy
 
         while (Context.running.load()) {
-            val frame = System.nanoTime()
+            val now = System.nanoTime()
+            val elapsed = now - time
+            time = now
 
-            val elapsedNanos = frame - time
-            time = frame
+            val delta = (elapsed.toDouble() / 1_000_000_000.0).toFloat()
 
-            val delta = elapsedNanos.coerceAtMost(250_000_000L).toDouble() / 1_000_000_000.0
-            accumulator += delta
+            println(String.format("%.3fs", delta))
 
-            while (accumulator >= fixedDelta) {
-                for (particle in particles) {
-                    if (particle.p.x > boxSize * 0.5f) {
-                        particle.p = Vec3f(boxSize * 0.5f, particle.p.y, particle.p.z)
-                        particle.v = Vec3f(-particle.v.x.absoluteValue * 0.9f, particle.v.y, particle.v.z)
-                    } else if (particle.p.x < boxSize * -0.5f) {
-                        particle.p = Vec3f(boxSize * -0.5f, particle.p.y, particle.p.z)
-                        particle.v = Vec3f(particle.v.x.absoluteValue * 0.9f, particle.v.y, particle.v.z)
-                    }
-
-                    if (particle.p.y > boxSize * 0.5f) {
-                        particle.p = Vec3f(particle.p.x, boxSize * 0.5f, particle.p.z)
-                        particle.v = Vec3f(particle.v.x, -particle.v.y.absoluteValue * 0.9f, particle.v.z)
-                    } else if (particle.p.y < boxSize * -0.5f) {
-                        particle.p = Vec3f(particle.p.x, boxSize * -0.5f, particle.p.z)
-                        particle.v = Vec3f(particle.v.x, particle.v.y.absoluteValue * 0.9f, particle.v.z)
-                    }
-
-                    if (particle.p.z > boxSize * 0.5f) {
-                        particle.p = Vec3f(particle.p.x, particle.p.y, boxSize * 0.5f)
-                        particle.v = Vec3f(particle.v.x, particle.v.y, -particle.v.z.absoluteValue * 0.9f)
-                    } else if (particle.p.z < boxSize * -0.5f) {
-                        particle.p = Vec3f(particle.p.x, particle.p.y, boxSize * -0.5f)
-                        particle.v = Vec3f(particle.v.x, particle.v.y, particle.v.z.absoluteValue * 0.9f)
-                    }
-
-                    particle.p += particle.v * fixedDelta
+            for (particle in particles) {
+                if (particle.p.x > boxSize * 0.5f) {
+                    particle.p = Vec3f(boxSize * 0.5f, particle.p.y, particle.p.z)
+                    particle.v = Vec3f(-particle.v.x.absoluteValue * 0.9f, particle.v.y, particle.v.z)
+                } else if (particle.p.x < boxSize * -0.5f) {
+                    particle.p = Vec3f(boxSize * -0.5f, particle.p.y, particle.p.z)
+                    particle.v = Vec3f(particle.v.x.absoluteValue * 0.9f, particle.v.y, particle.v.z)
                 }
 
-                angle += 90.0f * fixedDelta
+                if (particle.p.y > boxSize * 0.5f) {
+                    particle.p = Vec3f(particle.p.x, boxSize * 0.5f, particle.p.z)
+                    particle.v = Vec3f(particle.v.x, -particle.v.y.absoluteValue * 0.9f, particle.v.z)
+                } else if (particle.p.y < boxSize * -0.5f) {
+                    particle.p = Vec3f(particle.p.x, boxSize * -0.5f, particle.p.z)
+                    particle.v = Vec3f(particle.v.x, particle.v.y.absoluteValue * 0.9f, particle.v.z)
+                }
 
-                accumulator -= fixedDelta
+                if (particle.p.z > boxSize * 0.5f) {
+                    particle.p = Vec3f(particle.p.x, particle.p.y, boxSize * 0.5f)
+                    particle.v = Vec3f(particle.v.x, particle.v.y, -particle.v.z.absoluteValue * 0.9f)
+                } else if (particle.p.z < boxSize * -0.5f) {
+                    particle.p = Vec3f(particle.p.x, particle.p.y, boxSize * -0.5f)
+                    particle.v = Vec3f(particle.v.x, particle.v.y, particle.v.z.absoluteValue * 0.9f)
+                }
+
+                particle.p += particle.v * delta
             }
 
-            val elapsed = System.nanoTime() - frame
-            val remaining = targetFrameNano - elapsed
-
-            if (remaining > 0L) {
-                LockSupport.parkNanos(remaining)
-            }
+            angle += 90.0f * delta
 
             synchronized(Context) {
                 Context.allocate()
@@ -356,6 +349,8 @@ fun main() {
                 strategy.show()
             } while (strategy.contentsLost())
         }
+    }.apply {
+        priority = Thread.MAX_PRIORITY
     }
 
     Context.allocate(true)

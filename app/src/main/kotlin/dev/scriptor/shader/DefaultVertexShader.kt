@@ -48,7 +48,7 @@ class DefaultVertexShader(
         val nor = normalModel * inNormal
 
         outPosition = pos.xyz / pos.w
-        outNormal = nor
+        outNormal = nor.unit
         outTexture = inTexture
         outColor = inColor
     }

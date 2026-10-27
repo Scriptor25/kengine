@@ -36,6 +36,8 @@ class DefaultFragmentShader(
         val sampled = sampler(inTexture)
         val t = (sun dot inNormal.unit).coerceIn(0.1f, 1.0f)
 
-        color = inColor * Vec4f(sampled.xyz * t, 1.0f)
+        val baseColor = sampled * inColor
+
+        color = Vec4f(baseColor.xyz * t, baseColor.w)
     }
 }
