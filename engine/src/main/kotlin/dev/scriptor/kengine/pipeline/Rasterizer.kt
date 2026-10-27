@@ -1,5 +1,9 @@
 package dev.scriptor.kengine.pipeline
 
+import dev.scriptor.kengine.pipeline.internal.RasterFragment
+import dev.scriptor.kengine.pipeline.internal.RasterTriangle
+import dev.scriptor.kengine.pipeline.internal.ScreenVertex
+
 class Rasterizer(
     val tileSize: Int,
 ) {

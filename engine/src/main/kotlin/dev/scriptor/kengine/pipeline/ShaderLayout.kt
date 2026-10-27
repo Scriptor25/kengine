@@ -28,6 +28,9 @@ abstract class ShaderLayout {
         return uniform
     }
 
+    inline fun <reified T : Any> uniform(): Uniform<T> =
+        uniform(T::class)
+
     fun <T : Any> input(type: KClass<T>, location: Int): Input<T> {
         nextInputLocation = location + 1
 
@@ -40,6 +43,16 @@ abstract class ShaderLayout {
         inputsList += input
         return input
     }
+
+    fun <T : Any> input(type: KClass<T>): Input<T> {
+        return input(type, nextInputLocation)
+    }
+
+    inline fun <reified T : Any> input(location: Int): Input<T> =
+        input(T::class, location)
+
+    inline fun <reified T : Any> input(): Input<T> =
+        input(T::class)
 
     fun <T : Any> output(type: KClass<T>, location: Int): Output<T> {
         nextOutputLocation = location + 1
@@ -54,25 +67,12 @@ abstract class ShaderLayout {
         return output
     }
 
-    fun <T : Any> input(type: KClass<T>): Input<T> {
-        return input(type, nextInputLocation)
-    }
-
     fun <T : Any> output(type: KClass<T>): Output<T> {
         return output(type, nextOutputLocation)
     }
 
-    inline fun <reified T : Any> input(location: Int): Input<T> =
-        input(T::class, location)
-
     inline fun <reified T : Any> output(location: Int): Output<T> =
         output(T::class, location)
-
-    inline fun <reified T : Any> uniform(): Uniform<T> =
-        uniform(T::class)
-
-    inline fun <reified T : Any> input(): Input<T> =
-        input(T::class)
 
     inline fun <reified T : Any> output(): Output<T> =
         output(T::class)

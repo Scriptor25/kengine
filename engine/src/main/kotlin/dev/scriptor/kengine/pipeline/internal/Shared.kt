@@ -1,13 +1,17 @@
-package dev.scriptor.kengine.pipeline
+package dev.scriptor.kengine.pipeline.internal
 
-import dev.scriptor.kengine.math.Vec4f
+import dev.scriptor.kengine.pipeline.Input
+import dev.scriptor.kengine.pipeline.Output
 
-internal class ClipVertex(
-    val position: Vec4f,
+class ClipVertex(
+    val px: Float,
+    val py: Float,
+    val pz: Float,
+    val pw: Float,
     val varyings: Array<Any>,
 )
 
-internal class ScreenVertex(
+class ScreenVertex(
     val x: Float,
     val y: Float,
     val depth: Float,
@@ -15,7 +19,7 @@ internal class ScreenVertex(
     val varyings: Array<Any>,
 )
 
-internal data class RasterTriangle(
+data class RasterTriangle(
     val v0: ScreenVertex,
     val v1: ScreenVertex,
     val v2: ScreenVertex,
@@ -26,7 +30,7 @@ internal data class RasterTriangle(
     val maxY: Int,
 )
 
-internal data class RasterFragment(
+data class RasterFragment(
     val x: Int,
     val y: Int,
     val depth: Float,
@@ -47,3 +51,9 @@ internal data class RasterFragment(
         return Triple(w0 * inv, w1 * inv, w2 * inv)
     }
 }
+
+data class Varying<T : Any>(
+    val output: Output<T>,
+    val input: Input<T>,
+    val interpolator: Interpolator<T>,
+)

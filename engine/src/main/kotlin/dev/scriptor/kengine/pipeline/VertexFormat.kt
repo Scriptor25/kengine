@@ -11,7 +11,8 @@ sealed interface VertexFormat<T : Any> {
 
     fun get(buffer: ByteBuffer, offset: Int): T
 
-    data object FLOAT : VertexFormat<Float> {
+    object FLOAT : VertexFormat<Float> {
+
         override val type: KClass<Float> = Float::class
         override val size: Int = Float.SIZE_BYTES
 
@@ -20,7 +21,8 @@ sealed interface VertexFormat<T : Any> {
         }
     }
 
-    data object VEC2 : VertexFormat<Vec2f> {
+    object VEC2F : VertexFormat<Vec2f> {
+
         override val type: KClass<Vec2f> = Vec2f::class
         override val size: Int = Vec2f.SIZE_BYTES
 
@@ -29,7 +31,8 @@ sealed interface VertexFormat<T : Any> {
         }
     }
 
-    data object VEC3 : VertexFormat<Vec3f> {
+    object VEC3F : VertexFormat<Vec3f> {
+
         override val type: KClass<Vec3f> = Vec3f::class
         override val size: Int = Vec3f.SIZE_BYTES
 
@@ -38,7 +41,8 @@ sealed interface VertexFormat<T : Any> {
         }
     }
 
-    data object VEC4 : VertexFormat<Vec4f> {
+    object VEC4F : VertexFormat<Vec4f> {
+
         override val type: KClass<Vec4f> = Vec4f::class
         override val size: Int = Vec4f.SIZE_BYTES
 

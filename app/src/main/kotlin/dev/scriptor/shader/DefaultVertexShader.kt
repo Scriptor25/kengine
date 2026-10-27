@@ -25,11 +25,9 @@ class DefaultVertexShader(
     context: ShaderContext,
 ) : Shader<DefaultVertexShaderLayout>(DefaultVertexShaderLayout, context) {
 
-    val instance by use(layout.instance)
-
-    val transform by use(layout.transforms, ::instance)
-    val model by use(layout.models, ::instance)
-    val normalModel by use(layout.normalModels, ::instance)
+    val transform by use(layout.transforms)
+    val model by use(layout.models)
+    val normalModel by use(layout.normalModels)
 
     val inPosition by use(layout.inPosition)
     val inNormal by use(layout.inNormal)

@@ -22,12 +22,11 @@ import java.awt.event.ComponentEvent
 import java.awt.event.KeyEvent
 import java.awt.image.BufferedImage
 import java.awt.image.DataBufferInt
+import java.util.concurrent.locks.LockSupport
 import javax.imageio.ImageIO
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.math.absoluteValue
-import kotlin.time.Clock
-import kotlin.time.DurationUnit
 
 object Context {
     @OptIn(ExperimentalAtomicApi::class)
@@ -67,6 +66,7 @@ object Context {
 data class Particle(
     var p: Vec3f,
     var v: Vec3f,
+    val s: Float,
 )
 
 @OptIn(ExperimentalAtomicApi::class)
@@ -128,8 +128,10 @@ fun main() {
         }
     }
 
+    val boxSize = 20.0f
+
     val particles = buildList {
-        for (i in 0..100) {
+        for (i in 0..1000) {
             val vx = Math.random().toFloat() * 2.0f - 1.0f
             val vy = Math.random().toFloat() * 2.0f - 1.0f
             val vz = Math.random().toFloat() * 2.0f - 1.0f
@@ -138,6 +140,7 @@ fun main() {
                 Particle(
                     Vec3f(0.0f, 0.0f, 0.0f),
                     Vec3f(vx, vy, vz),
+                    Math.random().toFloat() * 0.8f + 0.1f,
                 )
             )
         }
@@ -173,7 +176,12 @@ fun main() {
         vertices += 1.0f
     }
 
-    var time = Clock.System.now()
+    val targetFrame = 60
+    val targetFrameNano = 1_000_000_000L / targetFrame
+    val fixedDelta = 1.0f / targetFrame.toFloat()
+
+    var time = System.nanoTime()
+    var accumulator = 0.0
 
     var angle = 0.0f
 
@@ -209,13 +217,54 @@ fun main() {
         val strategy = canvas.bufferStrategy
 
         while (Context.running.load()) {
-            val now = Clock.System.now()
-            val delta = now - time
-            time = now
+            val frame = System.nanoTime()
 
-            println(delta)
+            val elapsedNanos = frame - time
+            time = frame
 
-            val speed = delta.toDouble(DurationUnit.SECONDS).toFloat() * 100.0f
+            val delta = elapsedNanos.coerceAtMost(250_000_000L).toDouble() / 1_000_000_000.0
+            accumulator += delta
+
+            while (accumulator >= fixedDelta) {
+                for (particle in particles) {
+                    if (particle.p.x > boxSize * 0.5f) {
+                        particle.p = Vec3f(boxSize * 0.5f, particle.p.y, particle.p.z)
+                        particle.v = Vec3f(-particle.v.x.absoluteValue * 0.9f, particle.v.y, particle.v.z)
+                    } else if (particle.p.x < boxSize * -0.5f) {
+                        particle.p = Vec3f(boxSize * -0.5f, particle.p.y, particle.p.z)
+                        particle.v = Vec3f(particle.v.x.absoluteValue * 0.9f, particle.v.y, particle.v.z)
+                    }
+
+                    if (particle.p.y > boxSize * 0.5f) {
+                        particle.p = Vec3f(particle.p.x, boxSize * 0.5f, particle.p.z)
+                        particle.v = Vec3f(particle.v.x, -particle.v.y.absoluteValue * 0.9f, particle.v.z)
+                    } else if (particle.p.y < boxSize * -0.5f) {
+                        particle.p = Vec3f(particle.p.x, boxSize * -0.5f, particle.p.z)
+                        particle.v = Vec3f(particle.v.x, particle.v.y.absoluteValue * 0.9f, particle.v.z)
+                    }
+
+                    if (particle.p.z > boxSize * 0.5f) {
+                        particle.p = Vec3f(particle.p.x, particle.p.y, boxSize * 0.5f)
+                        particle.v = Vec3f(particle.v.x, particle.v.y, -particle.v.z.absoluteValue * 0.9f)
+                    } else if (particle.p.z < boxSize * -0.5f) {
+                        particle.p = Vec3f(particle.p.x, particle.p.y, boxSize * -0.5f)
+                        particle.v = Vec3f(particle.v.x, particle.v.y, particle.v.z.absoluteValue * 0.9f)
+                    }
+
+                    particle.p += particle.v * fixedDelta
+                }
+
+                angle += 90.0f * fixedDelta
+
+                accumulator -= fixedDelta
+            }
+
+            val elapsed = System.nanoTime() - frame
+            val remaining = targetFrameNano - elapsed
+
+            if (remaining > 0L) {
+                LockSupport.parkNanos(remaining)
+            }
 
             synchronized(Context) {
                 Context.allocate()
@@ -258,13 +307,11 @@ fun main() {
                     normalModels[1] = normalModel
                 }
 
-                angle += speed
-
                 for ([index, particle] in particles.withIndex()) {
                     val model = Mat4f.trs(
-                        translation = Vec3f(particle.p.x, particle.p.y, particle.p.z - 4.0f),
+                        translation = Vec3f(particle.p.x, particle.p.y, particle.p.z - boxSize * 1.5f),
                         rotation = Vec3f(angle * particle.v.x, angle * particle.v.y, angle * particle.v.z),
-                        scale = Vec3f(0.1f),
+                        scale = Vec3f(particle.s),
                     ) * pivot
                     val normalModel = model.toMat3f().inverse().transpose()
                     val transform = perspective * model
@@ -277,39 +324,11 @@ fun main() {
                 defaultPipeline(
                     surface,
                     cubeMesh,
-                    0,
+                    2,
                     particles.size,
                     vertexUniformValues,
                     fragmentUniformValues,
                 )
-            }
-
-            for (particle in particles) {
-                if (particle.p.x > 2.0f) {
-                    particle.p = Vec3f(2.0f, particle.p.y, particle.p.z)
-                    particle.v = Vec3f(-particle.v.x.absoluteValue, particle.v.y, particle.v.z)
-                } else if (particle.p.x < -2.0f) {
-                    particle.p = Vec3f(-2.0f, particle.p.y, particle.p.z)
-                    particle.v = Vec3f(particle.v.x.absoluteValue, particle.v.y, particle.v.z)
-                }
-
-                if (particle.p.y > 2.0f) {
-                    particle.p = Vec3f(particle.p.x, 2.0f, particle.p.z)
-                    particle.v = Vec3f(particle.v.x, -particle.v.y.absoluteValue, particle.v.z)
-                } else if (particle.p.y < -2.0f) {
-                    particle.p = Vec3f(particle.p.x, -2.0f, particle.p.z)
-                    particle.v = Vec3f(particle.v.x, particle.v.y.absoluteValue, particle.v.z)
-                }
-
-                if (particle.p.z > 2.0f) {
-                    particle.p = Vec3f(particle.p.x, particle.p.y, 2.0f)
-                    particle.v = Vec3f(particle.v.x, particle.v.y, -particle.v.z.absoluteValue)
-                } else if (particle.p.z < -2.0f) {
-                    particle.p = Vec3f(particle.p.x, particle.p.y, -2.0f)
-                    particle.v = Vec3f(particle.v.x, particle.v.y, particle.v.z.absoluteValue)
-                }
-
-                particle.p += particle.v * speed * 0.02f
             }
 
             do {

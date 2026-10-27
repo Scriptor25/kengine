@@ -7,6 +7,11 @@ abstract class Shader<L : ShaderLayout>(
     val layout: L,
     private val context: ShaderContext,
 ) {
+    private val instanceField = when (layout) {
+        is VertexShaderLayout -> layout.instance
+        else -> null
+    }
+
     interface Delegate<T> {
         operator fun getValue(thisRef: Any?, property: KProperty<*>): T
     }
@@ -17,33 +22,30 @@ abstract class Shader<L : ShaderLayout>(
     }
 
     fun <T : Any> use(field: Uniform<T>): Delegate<T> = object : Delegate<T> {
-        override fun getValue(thisRef: Any?, property: KProperty<*>): T {
-            return field.type.cast(context[field.id])
-        }
-    }
+        override fun getValue(thisRef: Any?, property: KProperty<*>): T =
+            when (val value = context[field.id]) {
+                is Array<*> -> {
+                    require(instanceField != null)
 
-    fun <T : Any> use(field: Uniform<T>, index: Int): Delegate<T> = object : Delegate<T> {
-        override fun getValue(thisRef: Any?, property: KProperty<*>): T {
-            return field.type.cast((context[field.id] as Array<*>)[index])
-        }
-    }
+                    val index = context[instanceField.id] as Int
 
-    fun <T : Any> use(field: Uniform<T>, index: () -> Int): Delegate<T> = object : Delegate<T> {
-        override fun getValue(thisRef: Any?, property: KProperty<*>): T {
-            return field.type.cast((context[field.id] as Array<*>)[index()])
-        }
+                    require(index in value.indices)
+
+                    field.type.cast(value[index])
+                }
+
+                else -> field.type.cast(context[field.id])
+            }
     }
 
     fun <T : Any> use(field: Input<T>): Delegate<T> = object : Delegate<T> {
-        override fun getValue(thisRef: Any?, property: KProperty<*>): T {
-            return field.type.cast(context[field.id])
-        }
+        override fun getValue(thisRef: Any?, property: KProperty<*>): T =
+            field.type.cast(context[field.id])
     }
 
     fun <T : Any> use(field: Output<T>): MutableDelegate<T> = object : MutableDelegate<T> {
-        override fun getValue(thisRef: Any?, property: KProperty<*>): T {
-            return field.type.cast(context[field.id])
-        }
+        override fun getValue(thisRef: Any?, property: KProperty<*>): T =
+            field.type.cast(context[field.id])
 
         override fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {
             context[field.id] = value

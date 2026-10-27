@@ -13,12 +13,12 @@ abstract class VertexShaderLayout : ShaderLayout() {
         val stride: Int
         val attributes = buildList {
             var offset = 0
-            for (input in inputs.filter { it.id != instance.id }.sortedBy(Input<*>::location)) {
+            for (input in inputs.filter { it.location >= 0 }.sortedBy(Input<*>::location)) {
                 val format = when (input.type) {
                     Float::class -> VertexFormat.FLOAT
-                    Vec2f::class -> VertexFormat.VEC2
-                    Vec3f::class -> VertexFormat.VEC3
-                    Vec4f::class -> VertexFormat.VEC4
+                    Vec2f::class -> VertexFormat.VEC2F
+                    Vec3f::class -> VertexFormat.VEC3F
+                    Vec4f::class -> VertexFormat.VEC4F
                     else -> error("unsupported vertex format")
                 }
 

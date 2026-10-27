@@ -2,6 +2,7 @@ package dev.scriptor.kengine
 
 import dev.scriptor.kengine.math.Vec2f
 import dev.scriptor.kengine.math.Vec3f
+import dev.scriptor.kengine.pipeline.ElementBuffer
 import java.io.InputStream
 import java.nio.ByteBuffer
 
@@ -64,13 +65,7 @@ data class ObjectFile(
             }
             .flip()
 
-        val elementBuffer = ByteBuffer.allocate(elements.size * Int.SIZE_BYTES)
-            .apply {
-                for (element in elements) {
-                    putInt(element)
-                }
-            }
-            .flip()
+        val elementBuffer = ElementBuffer.IntElementBuffer(elements.toIntArray())
 
         return Mesh(
             vertexBuffer,
