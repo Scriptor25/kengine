@@ -31,7 +31,7 @@ object Context {
     @OptIn(ExperimentalAtomicApi::class)
     val running = AtomicBoolean(true)
 
-    const val SCALE = 1
+    const val SCALE = 2
 
     var width: Int = 0
     var height: Int = 0
@@ -41,18 +41,28 @@ object Context {
     val scaledHeight
         get() = height / SCALE
 
+    var imageWidth: Int = 0
+        private set
+    var imageHeight: Int = 0
+        private set
+
     lateinit var image: BufferedImage
+        private set
+
+    lateinit var color: IntArray
         private set
     lateinit var depth: FloatArray
         private set
 
-    val color: IntArray
-        get() = (image.raster.dataBuffer as DataBufferInt).data
+    fun allocate() {
+        if (imageWidth == scaledWidth && imageHeight == scaledHeight) return
 
-    fun allocate(first: Boolean = false) {
-        if (!first && image.width == scaledWidth && image.height == scaledHeight) return
+        imageWidth = scaledWidth
+        imageHeight = scaledHeight
 
-        image = BufferedImage(scaledWidth, scaledHeight, BufferedImage.TYPE_INT_RGB)
+        image = BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_RGB)
+
+        color = (image.raster.dataBuffer as DataBufferInt).data
         depth = FloatArray(scaledWidth * scaledHeight)
     }
 
@@ -65,7 +75,7 @@ object Context {
 data class Particle(
     var p: Vec3f,
     var v: Vec3f,
-    val s: Float,
+    val s: Vec3f,
 )
 
 @OptIn(ExperimentalAtomicApi::class)
@@ -144,12 +154,13 @@ fun main() {
             val vx = Math.random().toFloat() * 2.0f - 1.0f
             val vy = Math.random().toFloat() * 2.0f - 1.0f
             val vz = Math.random().toFloat() * 2.0f - 1.0f
+            val s = Math.random().toFloat() * 0.8f + 0.1f
 
             add(
                 Particle(
                     Vec3f(0.0f, 0.0f, 0.0f),
                     Vec3f(vx, vy, vz),
-                    Math.random().toFloat() * 0.8f + 0.1f,
+                    Vec3f(s),
                 )
             )
         }
@@ -188,6 +199,7 @@ fun main() {
     var time = System.nanoTime()
 
     var angle = 0.0f
+    val damp = 1.0f
 
     val cubeImageStream = ClassLoader.getSystemResourceAsStream("cube.png")
     val cubeImage = ImageIO.read(cubeImageStream)
@@ -232,26 +244,26 @@ fun main() {
             for (particle in particles) {
                 if (particle.p.x > boxSize * 0.5f) {
                     particle.p = Vec3f(boxSize * 0.5f, particle.p.y, particle.p.z)
-                    particle.v = Vec3f(-particle.v.x.absoluteValue * 0.9f, particle.v.y, particle.v.z)
+                    particle.v = Vec3f(-particle.v.x.absoluteValue * damp, particle.v.y, particle.v.z)
                 } else if (particle.p.x < boxSize * -0.5f) {
                     particle.p = Vec3f(boxSize * -0.5f, particle.p.y, particle.p.z)
-                    particle.v = Vec3f(particle.v.x.absoluteValue * 0.9f, particle.v.y, particle.v.z)
+                    particle.v = Vec3f(particle.v.x.absoluteValue * damp, particle.v.y, particle.v.z)
                 }
 
                 if (particle.p.y > boxSize * 0.5f) {
                     particle.p = Vec3f(particle.p.x, boxSize * 0.5f, particle.p.z)
-                    particle.v = Vec3f(particle.v.x, -particle.v.y.absoluteValue * 0.9f, particle.v.z)
+                    particle.v = Vec3f(particle.v.x, -particle.v.y.absoluteValue * damp, particle.v.z)
                 } else if (particle.p.y < boxSize * -0.5f) {
                     particle.p = Vec3f(particle.p.x, boxSize * -0.5f, particle.p.z)
-                    particle.v = Vec3f(particle.v.x, particle.v.y.absoluteValue * 0.9f, particle.v.z)
+                    particle.v = Vec3f(particle.v.x, particle.v.y.absoluteValue * damp, particle.v.z)
                 }
 
                 if (particle.p.z > boxSize * 0.5f) {
                     particle.p = Vec3f(particle.p.x, particle.p.y, boxSize * 0.5f)
-                    particle.v = Vec3f(particle.v.x, particle.v.y, -particle.v.z.absoluteValue * 0.9f)
+                    particle.v = Vec3f(particle.v.x, particle.v.y, -particle.v.z.absoluteValue * damp)
                 } else if (particle.p.z < boxSize * -0.5f) {
                     particle.p = Vec3f(particle.p.x, particle.p.y, boxSize * -0.5f)
-                    particle.v = Vec3f(particle.v.x, particle.v.y, particle.v.z.absoluteValue * 0.9f)
+                    particle.v = Vec3f(particle.v.x, particle.v.y, particle.v.z.absoluteValue * damp)
                 }
 
                 particle.p += particle.v * delta
@@ -270,16 +282,22 @@ fun main() {
                     far = 100.0f,
                 )
 
+                val view = Mat4f.lookAt(
+                    Vec3f(boxSize),
+                    Vec3f(0.0f),
+                    Vec3f(0.0f, 1.0f, 0.0f),
+                )
+
                 val pivot = Mat4f.translation(-0.5f, -0.5f, -0.5f)
 
                 run {
                     val model = Mat4f.trs(
-                        translation = Vec3f(-1.0f, 0.0f, -4.0f),
+                        translation = Vec3f(-1.0f, 0.0f, 0.0f),
                         rotation = Vec3f(angle, angle * 0.32f, angle * 0.23f),
                         scale = Vec3f(1.0f),
                     ) * pivot
                     val normalModel = model.toMat3f().inverse().transpose()
-                    val transform = perspective * model
+                    val transform = perspective * view * model
 
                     transforms[0] = transform
                     models[0] = model
@@ -288,12 +306,12 @@ fun main() {
 
                 run {
                     val model = Mat4f.trs(
-                        translation = Vec3f(1.0f, 0.0f, -4.0f),
+                        translation = Vec3f(1.0f, 0.0f, 0.0f),
                         rotation = Vec3f(angle * 0.43f, angle * 0.17f, angle * 0.67f),
                         scale = Vec3f(1.0f),
                     ) * pivot
                     val normalModel = model.toMat3f().inverse().transpose()
-                    val transform = perspective * model
+                    val transform = perspective * view * model
 
                     transforms[1] = transform
                     models[1] = model
@@ -302,12 +320,12 @@ fun main() {
 
                 for ([index, particle] in particles.withIndex()) {
                     val model = Mat4f.trs(
-                        translation = Vec3f(particle.p.x, particle.p.y, particle.p.z - boxSize * 1.5f),
-                        rotation = Vec3f(angle * particle.v.x, angle * particle.v.y, angle * particle.v.z),
-                        scale = Vec3f(particle.s),
+                        translation = particle.p,
+                        rotation = particle.v * angle,
+                        scale = particle.s,
                     ) * pivot
                     val normalModel = model.toMat3f().inverse().transpose()
-                    val transform = perspective * model
+                    val transform = perspective * view * model
 
                     transforms[2 + index] = transform
                     models[2 + index] = model
@@ -332,6 +350,10 @@ fun main() {
                         RenderingHints.KEY_INTERPOLATION,
                         RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR,
                     )
+                    graphics.setRenderingHint(
+                        RenderingHints.KEY_ALPHA_INTERPOLATION,
+                        RenderingHints.VALUE_ALPHA_INTERPOLATION_SPEED,
+                    )
 
                     try {
                         graphics.drawImage(
@@ -352,8 +374,6 @@ fun main() {
     }.apply {
         priority = Thread.MAX_PRIORITY
     }
-
-    Context.allocate(true)
 
     thread.start()
 }

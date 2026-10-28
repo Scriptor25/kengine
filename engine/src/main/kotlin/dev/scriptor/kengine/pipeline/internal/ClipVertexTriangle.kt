@@ -16,8 +16,7 @@ fun <V : VertexShaderLayout, F : FragmentShaderLayout> clipVertexTriangle(
             ?: error("Vertex shader did not write a valid clip-space position")
 
         val values = Array(pipeline.varyings.size) { index ->
-            val outputId = pipeline.varyings[index].output.id.index
-            outputs[outputId]
+            outputs[pipeline.varyings[index].output.id.index]
         }
 
         return ClipVertex(
