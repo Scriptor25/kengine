@@ -3,7 +3,7 @@ package dev.scriptor.kengine.math
 import java.nio.ByteBuffer
 import kotlin.math.sqrt
 
-value class Vec2i(
+class Vec2i(
     val x: Int,
     val y: Int,
 ) {

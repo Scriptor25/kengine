@@ -15,13 +15,3 @@ maven = ["org.jetbrains.kotlin:kotlin-stdlib:2.5.0-Beta2"]
 
 [compiler]
 platform = "jvm"
-
-[compiler.common]
-apiVersion = "2.5"
-languageVersion = "2.5"
-
-[compiler.jvm]
-jdkHome = "/usr/local/lib/jvm/java-28-openjdk"
-target = "28"
-enablePreview = true
-extra = ["-Xvalhalla-value-classes", "-XXLanguage:+FullValueClasses"]
