@@ -300,6 +300,8 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
 
                     val fragmentShader = fragmentShaderFactory(fragmentShaderContext)
 
+                    val weights = FloatArray(3)
+
                     for (triangle in bin) {
                         rasterizer.rasterize(
                             triangle,
@@ -314,7 +316,7 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
                             val depthBuffer = surface.depth(index)
 
                             if (depth < depthBuffer) {
-                                val weights = fragment.perspectiveWeights()
+                                fragment.perspectiveWeights(weights)
 
                                 fragmentInputValues.fill(Unit)
                                 fragmentOutputValues.fill(Unit)
@@ -325,11 +327,11 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
                                     fragmentInputValues[varying.input.id.index] =
                                         (varying.interpolator as Interpolator<Any>)(
                                             triangle.v0.varyings[varyingIndex],
-                                            weights.first,
+                                            weights[0],
                                             triangle.v1.varyings[varyingIndex],
-                                            weights.second,
+                                            weights[1],
                                             triangle.v2.varyings[varyingIndex],
-                                            weights.third,
+                                            weights[2],
                                         )
                                 }
 

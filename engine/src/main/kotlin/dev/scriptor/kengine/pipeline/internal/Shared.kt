@@ -41,14 +41,16 @@ data class RasterFragment(
     val invW1: Float,
     val invW2: Float,
 ) {
-    fun perspectiveWeights(): Triple<Float, Float, Float> {
+    fun perspectiveWeights(weights: FloatArray) {
         val w0 = b0 * invW0
         val w1 = b1 * invW1
         val w2 = b2 * invW2
 
         val inv = 1.0f / (w0 + w1 + w2)
 
-        return Triple(w0 * inv, w1 * inv, w2 * inv)
+        weights[0] = w0 * inv
+        weights[1] = w1 * inv
+        weights[2] = w2 * inv
     }
 }
 
