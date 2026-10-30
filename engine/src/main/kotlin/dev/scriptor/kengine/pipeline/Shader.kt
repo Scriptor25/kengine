@@ -45,7 +45,7 @@ abstract class Shader<L : ShaderLayout>(
 
     fun <T : Any> use(field: Output<T>): MutableDelegate<T> = object : MutableDelegate<T> {
         override fun getValue(thisRef: Any?, property: KProperty<*>): T =
-            field.type.cast(context[field.id])
+            error("cannot read output")
 
         override fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {
             context[field.id] = value

@@ -22,7 +22,7 @@ abstract class VertexShaderLayout : ShaderLayout() {
                     else -> error("unsupported vertex format")
                 }
 
-                add(VertexAttribute(input as Input<Any>, format as VertexFormat<Any>, offset))
+                add(VertexAttribute(input, format, offset))
                 offset += format.size
             }
 

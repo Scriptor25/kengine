@@ -2,10 +2,7 @@ package dev.scriptor
 
 import dev.scriptor.kengine.KWindow
 import dev.scriptor.kengine.ObjectFile
-import dev.scriptor.kengine.math.Mat4f
-import dev.scriptor.kengine.math.Vec2f
-import dev.scriptor.kengine.math.Vec3f
-import dev.scriptor.kengine.math.Vec4f
+import dev.scriptor.kengine.math.*
 import dev.scriptor.kengine.pipeline.GraphicsPipeline
 import dev.scriptor.kengine.pipeline.Rasterizer
 import dev.scriptor.kengine.pipeline.Sampler2D
@@ -80,6 +77,12 @@ data class Particle(
 
 @OptIn(ExperimentalAtomicApi::class)
 fun main() {
+    val a = floatArrayOf(1.0f, 2.0f, 3.0f)
+    val b = floatArrayOf(3.0f, 2.0f, 1.0f)
+    val c = simdF { a.asNode() + b.asNode() }
+
+    println("${a.contentToString()} + ${b.contentToString()} = ${c.contentToString()}")
+
     val window = KWindow()
 
     lateinit var thread: Thread

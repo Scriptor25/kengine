@@ -4,9 +4,9 @@ import dev.scriptor.kengine.math.*
 import java.nio.ByteBuffer
 import kotlin.reflect.KClass
 
-sealed interface VertexFormat<T : Any> {
+sealed interface VertexFormat<out T : Any> {
 
-    val type: KClass<T>
+    val type: KClass<out T>
     val size: Int
 
     fun get(buffer: ByteBuffer, offset: Int): T

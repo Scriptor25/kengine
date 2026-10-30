@@ -48,7 +48,7 @@ fun varyings(
                     Interpolator.VEC4F,
                 )
 
-                else -> error("unsupported type $type")
+                else -> error("unsupported varying type $type")
             }
         }
 }

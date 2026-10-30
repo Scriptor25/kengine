@@ -5,8 +5,8 @@ import kotlin.reflect.KClass
 @JvmInline
 value class InputId(val index: Int)
 
-data class Input<T : Any>(
+data class Input<out T : Any>(
     val id: InputId,
-    val type: KClass<T>,
+    val type: KClass<out T>,
     val location: Int,
 )
