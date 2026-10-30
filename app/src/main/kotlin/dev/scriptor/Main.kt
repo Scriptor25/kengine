@@ -77,12 +77,6 @@ data class Particle(
 
 @OptIn(ExperimentalAtomicApi::class)
 fun main() {
-    val a = floatArrayOf(1.0f, 2.0f, 3.0f)
-    val b = floatArrayOf(3.0f, 2.0f, 1.0f)
-    val c = simdF { a.asNode() + b.asNode() }
-
-    println("${a.contentToString()} + ${b.contentToString()} = ${c.contentToString()}")
-
     val window = KWindow()
 
     lateinit var thread: Thread

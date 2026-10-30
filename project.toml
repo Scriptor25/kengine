@@ -15,3 +15,6 @@ maven = ["org.jetbrains.kotlin:kotlin-stdlib:2.5.0-Beta2"]
 
 [compiler]
 platform = "jvm"
+
+[compiler.jvm]
+addModules = ["jdk.incubator.vector"]
