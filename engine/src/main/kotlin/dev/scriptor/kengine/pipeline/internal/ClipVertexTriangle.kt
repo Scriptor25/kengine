@@ -7,11 +7,11 @@ import dev.scriptor.kengine.pipeline.VertexShaderLayout
 
 fun <V : VertexShaderLayout, F : FragmentShaderLayout> clipVertexTriangle(
     pipeline: GraphicsPipeline<V, F>,
-    v0: Array<Any>,
-    v1: Array<Any>,
-    v2: Array<Any>,
+    v0: Array<Any?>,
+    v1: Array<Any?>,
+    v2: Array<Any?>,
 ): List<ClipVertex> {
-    fun toClipVertex(outputs: Array<Any>): ClipVertex {
+    fun toClipVertex(outputs: Array<Any?>): ClipVertex {
         val position = outputs[pipeline.vertexShaderLayout.position.id.index] as? Vec4f
             ?: error("Vertex shader did not write a valid clip-space position")
 

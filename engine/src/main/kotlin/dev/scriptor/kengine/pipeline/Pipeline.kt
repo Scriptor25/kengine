@@ -8,22 +8,20 @@ import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-class ShaderContextImpl(
-    val uniformValues: Array<Any>,
-    val inputValues: Array<Any>,
-    val outputValues: Array<Any>,
+private class ShaderContextImpl(
+    val uniformValues: Array<out Any?>,
+    val inputValues: Array<out Any?>,
+    val outputValues: Array<in Any?>,
 ) : ShaderContext {
 
     override fun get(id: UniformId): Any {
         return uniformValues[id.index]
+            ?: error("missing uniform value $id")
     }
 
     override fun get(id: InputId): Any {
         return inputValues[id.index]
-    }
-
-    override fun get(id: OutputId): Any {
-        return outputValues[id.index]
+            ?: error("missing input value $id")
     }
 
     override fun set(id: OutputId, value: Any) {
@@ -54,8 +52,8 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
     operator fun invoke(
         surface: Surface,
         mesh: Mesh,
-        vertexUniformValues: Array<Any> = emptyArray(),
-        fragmentUniformValues: Array<Any> = emptyArray(),
+        vertexUniformValues: Array<out Any?> = emptyArray(),
+        fragmentUniformValues: Array<out Any?> = emptyArray(),
     ) {
         invoke(
             surface,
@@ -73,8 +71,8 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
         mesh: Mesh,
         firstInstance: Int,
         instanceCount: Int,
-        vertexUniformValues: Array<Any> = emptyArray(),
-        fragmentUniformValues: Array<Any> = emptyArray(),
+        vertexUniformValues: Array<out Any?> = emptyArray(),
+        fragmentUniformValues: Array<out Any?> = emptyArray(),
     ) {
         invoke(
             surface,
@@ -95,8 +93,8 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
         elementBuffer: ElementBuffer,
         firstElement: Int,
         elementCount: Int,
-        vertexUniformValues: Array<Any> = emptyArray(),
-        fragmentUniformValues: Array<Any> = emptyArray(),
+        vertexUniformValues: Array<out Any?> = emptyArray(),
+        fragmentUniformValues: Array<out Any?> = emptyArray(),
     ) {
         invoke(
             surface,
@@ -119,8 +117,8 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
         elementCount: Int,
         firstInstance: Int,
         instanceCount: Int,
-        vertexUniformValues: Array<Any> = emptyArray(),
-        fragmentUniformValues: Array<Any> = emptyArray(),
+        vertexUniformValues: Array<out Any?> = emptyArray(),
+        fragmentUniformValues: Array<out Any?> = emptyArray(),
     ) {
         require(surface.width >= 0) {
             "surface width must not be negative"
@@ -185,8 +183,8 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
         if (elementCount == 0) return
         if (instanceCount == 0) return
 
-        val vertexInputValues: Array<Any> = Array(vertexShaderLayout.inputs.size) {}
-        val vertexOutputValues: Array<Any> = Array(vertexShaderLayout.outputs.size) {}
+        val vertexInputValues = arrayOfNulls<Any>(vertexShaderLayout.inputs.size)
+        val vertexOutputValues = arrayOfNulls<Any>(vertexShaderLayout.outputs.size)
         val vertexShaderContext = ShaderContextImpl(
             vertexUniformValues,
             vertexInputValues,
@@ -198,8 +196,8 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
         val vertexBase = vertexBuffer.position()
         val vertexCount = vertexBuffer.remaining() / vertexLayout.stride
 
-        val vertexShaderOutput: Array<Array<Any>> = Array(vertexCount) {
-            Array(vertexShaderLayout.outputs.size) {}
+        val vertexShaderOutput: Array<Array<Any?>> = Array(vertexCount) {
+            arrayOfNulls(vertexShaderLayout.outputs.size)
         }
 
         val tilesX = (surface.width + rasterizer.tileSize - 1) / rasterizer.tileSize
@@ -210,8 +208,8 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
 
         for (instance in firstInstance until firstInstance + instanceCount) {
             for (vertex in 0 until vertexCount) {
-                vertexInputValues.fill(Unit)
-                vertexOutputValues.fill(Unit)
+                vertexInputValues.fill(null)
+                vertexOutputValues.fill(null)
 
                 vertexInputValues[vertexShaderLayout.instance.id.index] = instance
 
@@ -290,8 +288,8 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
                         surface.fill(tileMinX, tileMinY, tileMaxX, tileMaxY, (0xff shl 24) or (cr shl 16) or (cg shl 8))
                     }
 
-                    val fragmentInputValues: Array<Any> = Array(fragmentShaderLayout.inputs.size) {}
-                    val fragmentOutputValues: Array<Any> = Array(fragmentShaderLayout.outputs.size) {}
+                    val fragmentInputValues = arrayOfNulls<Any>(fragmentShaderLayout.inputs.size)
+                    val fragmentOutputValues = arrayOfNulls<Any>(fragmentShaderLayout.outputs.size)
                     val fragmentShaderContext = ShaderContextImpl(
                         fragmentUniformValues,
                         fragmentInputValues,
@@ -318,21 +316,28 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
                             if (depth < depthBuffer) {
                                 fragment.perspectiveWeights(weights)
 
-                                fragmentInputValues.fill(Unit)
-                                fragmentOutputValues.fill(Unit)
+                                fragmentInputValues.fill(null)
+                                fragmentOutputValues.fill(null)
 
                                 for (varyingIndex in varyings.indices) {
                                     val varying = varyings[varyingIndex]
 
-                                    fragmentInputValues[varying.input.id.index] =
-                                        (varying.interpolator as Interpolator<Any>)(
-                                            triangle.v0.varyings[varyingIndex],
-                                            weights[0],
-                                            triangle.v1.varyings[varyingIndex],
-                                            weights[1],
-                                            triangle.v2.varyings[varyingIndex],
-                                            weights[2],
-                                        )
+                                    val v0 = triangle.v0.varyings[varyingIndex]
+                                    val v1 = triangle.v1.varyings[varyingIndex]
+                                    val v2 = triangle.v2.varyings[varyingIndex]
+                                    val lerp = varying.interpolator as Interpolator<Any>
+
+                                    when {
+                                        v0 != null && v1 != null && v2 != null ->
+                                            fragmentInputValues[varying.input.id.index] =
+                                                lerp(
+                                                    v0, weights[0],
+                                                    v1, weights[1],
+                                                    v2, weights[2],
+                                                )
+
+                                        else -> Unit
+                                    }
                                 }
 
                                 fragmentShader.main()

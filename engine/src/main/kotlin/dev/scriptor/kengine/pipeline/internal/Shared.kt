@@ -8,7 +8,7 @@ class ClipVertex(
     val py: Float,
     val pz: Float,
     val pw: Float,
-    val varyings: Array<Any>,
+    val varyings: Array<Any?>,
 )
 
 class ScreenVertex(
@@ -16,7 +16,7 @@ class ScreenVertex(
     val y: Float,
     val depth: Float,
     val invW: Float,
-    val varyings: Array<Any>,
+    val varyings: Array<Any?>,
 )
 
 data class RasterTriangle(

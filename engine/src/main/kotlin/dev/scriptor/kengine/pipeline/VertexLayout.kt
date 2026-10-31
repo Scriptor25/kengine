@@ -19,7 +19,7 @@ data class VertexLayout(
     fun fetch(
         buffer: ByteBuffer,
         offset: Int,
-        values: Array<Any>,
+        values: Array<Any?>,
     ) {
         for (attribute in attributes) {
             values[attribute.input.id.index] = attribute.format.get(buffer, offset + attribute.offset)

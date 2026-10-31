@@ -2,7 +2,10 @@ package dev.scriptor
 
 import dev.scriptor.kengine.KWindow
 import dev.scriptor.kengine.ObjectFile
-import dev.scriptor.kengine.math.*
+import dev.scriptor.kengine.math.Mat4f
+import dev.scriptor.kengine.math.Vec2f
+import dev.scriptor.kengine.math.Vec3f
+import dev.scriptor.kengine.math.Vec4f
 import dev.scriptor.kengine.pipeline.GraphicsPipeline
 import dev.scriptor.kengine.pipeline.Rasterizer
 import dev.scriptor.kengine.pipeline.Sampler2D
@@ -28,7 +31,7 @@ object Context {
     @OptIn(ExperimentalAtomicApi::class)
     val running = AtomicBoolean(true)
 
-    const val SCALE = 2
+    const val SCALE = 1
 
     var width: Int = 0
     var height: Int = 0
@@ -217,12 +220,12 @@ fun main() {
         }
     }
 
-    val transforms: Array<Any> = Array(2 + particles.size) {}
-    val models: Array<Any> = Array(2 + particles.size) {}
-    val normalModels: Array<Any> = Array(2 + particles.size) {}
+    val transforms = arrayOfNulls<Any>(2 + particles.size)
+    val models = arrayOfNulls<Any>(2 + particles.size)
+    val normalModels = arrayOfNulls<Any>(2 + particles.size)
 
-    val vertexUniformValues: Array<Any> = arrayOf(transforms, models, normalModels)
-    val fragmentUniformValues: Array<Any> = arrayOf(sampler)
+    val vertexUniformValues = arrayOf(transforms, models, normalModels)
+    val fragmentUniformValues = arrayOf(sampler)
 
     thread = Thread {
         canvas.createBufferStrategy(2)

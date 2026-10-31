@@ -11,11 +11,16 @@ fun <V : VertexShaderLayout, F : FragmentShaderLayout> interpolateClipVertex(
     t: Float,
 ): ClipVertex {
     val varyings = Array(pipeline.varyings.size) { index ->
-        (pipeline.varyings[index].interpolator as Interpolator<Any>)(
-            a.varyings[index],
-            b.varyings[index],
-            t,
-        )
+        val av = a.varyings[index]
+        val bv = b.varyings[index]
+        val lerp = pipeline.varyings[index].interpolator as Interpolator<Any>
+
+        when {
+            av != null && bv != null ->
+                lerp(av, bv, t)
+
+            else -> null
+        }
     }
 
     return ClipVertex(
