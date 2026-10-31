@@ -1,7 +1,6 @@
 package dev.scriptor.kengine.math.simd
 
 import jdk.incubator.vector.*
-import jdk.incubator.vector.VectorOperators.*
 
 sealed interface VectorAdapter<E : Number, A : Any> {
     val species: VectorSpecies<E>
@@ -11,33 +10,6 @@ sealed interface VectorAdapter<E : Number, A : Any> {
     fun load(element: E): Vector<E>
     fun load(array: A, offset: Int, mask: VectorMask<E>): Vector<E>
     fun store(array: A, offset: Int, mask: VectorMask<E>, vector: Vector<E>)
-
-    fun lanewise(op: Unary, v0: Vector<E>): Vector<E> =
-        v0.lanewise(op)
-
-    fun lanewise(op: Binary, v0: Vector<E>, v1: Vector<E>): Vector<E> =
-        v0.lanewise(op, v1)
-
-    fun lanewise(op: Associative, v0: Vector<E>, v1: Vector<E>): Vector<E> =
-        v0.lanewise(op, v1)
-
-    fun lanewise(op: Ternary, v0: Vector<E>, v1: Vector<E>, v2: Vector<E>): Vector<E> =
-        v0.lanewise(op, v1, v2)
-
-    fun test(op: Test, v0: Vector<E>): VectorMask<E> =
-        v0.test(op)
-
-    fun compare(op: Comparison, v0: Vector<E>, v1: Vector<E>): VectorMask<E> =
-        v0.compare(op, v1)
-
-    fun select(mask: VectorMask<E>, v0: Vector<E>, v1: Vector<E>): Vector<E> =
-        v1.blend(v0, mask)
-
-    fun and(v0: VectorMask<E>, v1: VectorMask<E>): VectorMask<E> =
-        v0.and(v1)
-
-    fun or(v0: VectorMask<E>, v1: VectorMask<E>): VectorMask<E> =
-        v0.or(v1)
 }
 
 object IntVectorAdapter : VectorAdapter<Int, IntArray> {
