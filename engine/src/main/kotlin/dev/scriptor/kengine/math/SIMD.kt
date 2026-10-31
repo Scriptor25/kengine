@@ -1,6 +1,6 @@
 package dev.scriptor.kengine.math
 
-import dev.scriptor.kengine.math.internal.*
+import dev.scriptor.kengine.math.simd.*
 import jdk.incubator.vector.VectorOperators.*
 
 class SIMD<E : Number, A : Any> {

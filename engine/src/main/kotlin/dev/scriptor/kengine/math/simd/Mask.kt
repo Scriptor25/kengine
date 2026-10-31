@@ -1,4 +1,4 @@
-package dev.scriptor.kengine.math.internal
+package dev.scriptor.kengine.math.simd
 
 import jdk.incubator.vector.VectorOperators.Comparison
 import jdk.incubator.vector.VectorOperators.Test

@@ -1,4 +1,4 @@
-package dev.scriptor.kengine.math.internal
+package dev.scriptor.kengine.math.simd
 
 import jdk.incubator.vector.Vector
 import jdk.incubator.vector.VectorMask

@@ -31,7 +31,7 @@ object Context {
     @OptIn(ExperimentalAtomicApi::class)
     val running = AtomicBoolean(true)
 
-    const val SCALE = 1
+    const val SCALE = 2
 
     var width: Int = 0
     var height: Int = 0
@@ -172,7 +172,7 @@ fun main() {
         ::DefaultVertexShader,
         ::DefaultFragmentShader,
         DefaultVertexShaderLayout.layout(),
-        Rasterizer(32),
+        Rasterizer(16),
     )
 
     val cubeObjectStream = ClassLoader.getSystemResourceAsStream("cube.obj")

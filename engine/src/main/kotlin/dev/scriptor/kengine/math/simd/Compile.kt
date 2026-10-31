@@ -1,4 +1,4 @@
-package dev.scriptor.kengine.math.internal
+package dev.scriptor.kengine.math.simd
 
 import java.util.*
 
@@ -17,7 +17,7 @@ class Compile<E : Number, A : Any> {
 
         val result = visit(node)
 
-        val allocation = SIMDRegisterAllocator(
+        val allocation = RegisterAllocator(
             instructions,
             intArrayOf(result.id),
             next,
@@ -25,7 +25,7 @@ class Compile<E : Number, A : Any> {
 
         return Program(
             instructions.map { it.rewrite(allocation.mapping) },
-            ValueOrArray.WithValue(Register(allocation.mapping[result.id])),
+            wrap(Register(allocation.mapping[result.id])),
             allocation.vectorCount,
             allocation.maskCount,
         )
@@ -40,7 +40,7 @@ class Compile<E : Number, A : Any> {
             .map(::visit)
             .toTypedArray()
 
-        val allocation = SIMDRegisterAllocator(
+        val allocation = RegisterAllocator(
             instructions,
             results.map { it.id }.toIntArray(),
             next,
@@ -48,7 +48,7 @@ class Compile<E : Number, A : Any> {
 
         return Program(
             instructions.map { it.rewrite(allocation.mapping) },
-            ValueOrArray.WithArray(results.map { Register(allocation.mapping[it.id]) }.toTypedArray()),
+            wrap(results.map { Register(allocation.mapping[it.id]) }.toTypedArray()),
             allocation.vectorCount,
             allocation.maskCount,
         )

@@ -1,9 +1,9 @@
 package dev.scriptor.kengine.pipeline
 
-import dev.scriptor.kengine.math.internal.Program
-import dev.scriptor.kengine.math.internal.ValueOrArray
-import dev.scriptor.kengine.math.internal.allocate
-import dev.scriptor.kengine.math.internal.invoke
+import dev.scriptor.kengine.math.simd.Program
+import dev.scriptor.kengine.math.simd.allocate
+import dev.scriptor.kengine.math.simd.invoke
+import dev.scriptor.kengine.math.simd.wrap
 import dev.scriptor.kengine.math.simdF
 import dev.scriptor.kengine.pipeline.internal.RasterFragment
 import dev.scriptor.kengine.pipeline.internal.RasterTriangle
@@ -148,51 +148,43 @@ class Rasterizer(
                 or if (edge1.inclusive) 0b010 else 0
                 or if (edge2.inclusive) 0b001 else 0
         ]!!
-        val context = program.allocate(ValueOrArray.WithArray(results))
+        val context = program.allocate(wrap(results))
 
         var yi = minY
         while (yi <= maxY) {
             val y = yi++
 
-            var xi = minX
-            while (xi <= maxX) {
-                val x = xi
-                xi += lanes
+            program(
+                row0, row1, row2,
+                edge0.a, edge1.a, edge2.a,
+                0.0f, offsets,
+                inverseArea,
+                v0.depth, v1.depth, v2.depth,
+                context = context,
+            )
 
-                val offset = x - minX
+            var ii = 0
+            while (ii < lanes) {
+                val i = ii++
 
-                program(
-                    row0, row1, row2,
-                    edge0.a, edge1.a, edge2.a,
-                    offset, offsets,
-                    inverseArea,
-                    v0.depth, v1.depth, v2.depth,
-                    context = context,
-                )
+                val depth = depths[i]
+                val b0 = b0s[i]
+                val b1 = b1s[i]
+                val b2 = b2s[i]
 
-                var ii = 0
-                while (ii < lanes) {
-                    val i = ii++
+                if (depth < 0.0f)
+                    continue
 
-                    val depth = depths[i]
-                    val b0 = b0s[i]
-                    val b1 = b1s[i]
-                    val b2 = b2s[i]
-
-                    if (depth < 0.0f)
-                        continue
-
-                    emit(
-                        RasterFragment(
-                            x + i, y,
-                            depth,
-                            b0, b1, b2,
-                            triangle.v0.invW,
-                            triangle.v1.invW,
-                            triangle.v2.invW,
-                        )
+                emit(
+                    RasterFragment(
+                        minX + i, y,
+                        depth,
+                        b0, b1, b2,
+                        triangle.v0.invW,
+                        triangle.v1.invW,
+                        triangle.v2.invW,
                     )
-                }
+                )
             }
 
             row0 += edge0.b

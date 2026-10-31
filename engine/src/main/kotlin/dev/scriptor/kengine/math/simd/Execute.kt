@@ -1,8 +1,8 @@
-package dev.scriptor.kengine.math.internal
+package dev.scriptor.kengine.math.simd
 
 import jdk.incubator.vector.VectorMask
 
-fun <E : Number, A : Any> execute(
+inline fun <reified E : Number, reified A : Any> execute(
     program: Program<E, A>,
     adapter: VectorAdapter<E, A>,
     context: ExecuteContext<E, A>,
@@ -36,51 +36,39 @@ fun <E : Number, A : Any> execute(
         var i = 0
         while (i < program.instructions.size) {
             val instruction = program.instructions[i++]
-
+            val ptr = instruction.register.id
             when (instruction) {
                 is LoadArgumentInstruction ->
-                    vectors[instruction.register.id] = when (val argument = arguments[instruction.index]) {
-                        is Number ->
-                            adapter.load(argument as E)
-
-                        is BooleanArray,
-                        is CharArray,
-                        is ByteArray,
-                        is ShortArray,
-                        is IntArray,
-                        is LongArray,
-                        is FloatArray,
-                        is DoubleArray,
-                        is Array<*> ->
-                            adapter.load(argument as A, offset, mask)
-
-                        else -> error("unsupported operand")
+                    vectors[ptr] = when (val argument = arguments[instruction.index]) {
+                        is A -> adapter.load(argument, offset, mask)
+                        is E -> adapter.load(argument)
+                        else -> error("invalid argument")
                     }
 
                 is LoadScalarInstruction ->
-                    vectors[instruction.register.id] = adapter.load(instruction.value)
+                    vectors[ptr] = adapter.load(instruction.value)
 
                 is LoadArrayInstruction ->
-                    vectors[instruction.register.id] = adapter.load(instruction.value, offset, mask)
+                    vectors[ptr] = adapter.load(instruction.value, offset, mask)
 
                 is UnaryInstruction -> {
                     val fst = vectors[instruction.fst.id]!!
 
-                    vectors[instruction.register.id] = adapter.unary(instruction.operator, fst)
+                    vectors[ptr] = adapter.lanewise(instruction.operator, fst)
                 }
 
                 is BinaryInstruction -> {
                     val fst = vectors[instruction.fst.id]!!
                     val snd = vectors[instruction.snd.id]!!
 
-                    vectors[instruction.register.id] = adapter.binary(instruction.operator, fst, snd)
+                    vectors[ptr] = adapter.lanewise(instruction.operator, fst, snd)
                 }
 
                 is AssociativeInstruction -> {
                     val fst = vectors[instruction.fst.id]!!
                     val snd = vectors[instruction.snd.id]!!
 
-                    vectors[instruction.register.id] = adapter.associative(instruction.operator, fst, snd)
+                    vectors[ptr] = adapter.lanewise(instruction.operator, fst, snd)
                 }
 
                 is TernaryInstruction -> {
@@ -88,7 +76,7 @@ fun <E : Number, A : Any> execute(
                     val snd = vectors[instruction.snd.id]!!
                     val trd = vectors[instruction.trd.id]!!
 
-                    vectors[instruction.register.id] = adapter.ternary(instruction.operator, fst, snd, trd)
+                    vectors[ptr] = adapter.lanewise(instruction.operator, fst, snd, trd)
                 }
 
                 is SelectInstruction -> {
@@ -96,65 +84,47 @@ fun <E : Number, A : Any> execute(
                     val fst = vectors[instruction.fst.id]!!
                     val snd = vectors[instruction.snd.id]!!
 
-                    vectors[instruction.register.id] = adapter.select(mask, fst, snd)
+                    vectors[ptr] = adapter.select(mask, fst, snd)
                 }
 
                 is TestInstruction -> {
                     val fst = vectors[instruction.fst.id]!!
 
-                    masks[instruction.register.id] = adapter.test(instruction.operator, fst)
+                    masks[ptr] = adapter.test(instruction.operator, fst)
                 }
 
                 is ComparisonInstruction -> {
                     val fst = vectors[instruction.fst.id]!!
                     val snd = vectors[instruction.snd.id]!!
 
-                    masks[instruction.register.id] = adapter.compare(instruction.operator, fst, snd)
+                    masks[ptr] = adapter.compare(instruction.operator, fst, snd)
                 }
 
                 is AndInstruction -> {
                     val fst = masks[instruction.fst.id]!!
                     val snd = masks[instruction.snd.id]!!
 
-                    masks[instruction.register.id] = adapter.and(fst, snd)
+                    masks[ptr] = adapter.and(fst, snd)
                 }
 
                 is OrInstruction -> {
                     val fst = masks[instruction.fst.id]!!
                     val snd = masks[instruction.snd.id]!!
 
-                    masks[instruction.register.id] = adapter.or(fst, snd)
+                    masks[ptr] = adapter.or(fst, snd)
                 }
             }
         }
 
-        when {
-            program.result is ValueOrArray.WithValue
-                    && output is ValueOrArray.WithValue -> {
-                adapter.store(
-                    output.value,
-                    offset,
-                    mask,
-                    vectors[program.result.value.id]!!,
-                )
-            }
-
-            program.result is ValueOrArray.WithArray
-                    && output is ValueOrArray.WithArray -> {
-                var i = 0
-                while (i < output.value.size) {
-                    adapter.store(
-                        output.value[i],
-                        offset,
-                        mask,
-                        vectors[program.result.value[i].id]!!,
-                    )
-
-                    i++
-                }
-            }
-
-            else -> error("dead code")
+        var index = 0
+        while (index < program.result.size) {
+            adapter.store(
+                output[index],
+                offset,
+                mask,
+                vectors[program.result[index].id]!!,
+            )
+            index++
         }
     }
 }

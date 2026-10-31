@@ -1,14 +1,8 @@
-package dev.scriptor.kengine.math.internal
+package dev.scriptor.kengine.math.simd
 
 import java.util.*
 
-class SIMDRegisterAllocation(
-    val mapping: IntArray,
-    val vectorCount: Int,
-    val maskCount: Int,
-)
-
-class SIMDRegisterAllocator(
+class RegisterAllocator(
     private val instructions: List<Instruction<*, *>>,
     private val outputs: IntArray,
     private val count: Int,
@@ -23,7 +17,7 @@ class SIMDRegisterAllocator(
 
     private val counts = IntArray(RegisterType.entries.size)
 
-    fun allocate(): SIMDRegisterAllocation {
+    fun allocate(): RegisterAllocation {
         val lastUses = IntArray(count) { -1 }
 
         for (i in instructions.indices) {
@@ -44,7 +38,7 @@ class SIMDRegisterAllocator(
             allocateClass(type, lastUses)
         }
 
-        return SIMDRegisterAllocation(
+        return RegisterAllocation(
             mapping,
             counts[RegisterType.Vector.ordinal],
             counts[RegisterType.Mask.ordinal],

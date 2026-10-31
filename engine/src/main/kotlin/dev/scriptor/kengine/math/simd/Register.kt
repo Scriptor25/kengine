@@ -1,4 +1,4 @@
-package dev.scriptor.kengine.math.internal
+package dev.scriptor.kengine.math.simd
 
 @JvmInline
 value class Register(

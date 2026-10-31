@@ -1,4 +1,4 @@
-package dev.scriptor.kengine.math.internal
+package dev.scriptor.kengine.math.simd
 
 import jdk.incubator.vector.Vector
 import jdk.incubator.vector.VectorMask
@@ -10,7 +10,7 @@ class Program<E : Number, A : Any>(
     val maskCount: Int,
 )
 
-fun <E : Number, A : Any> Program<E, A>.getSize(
+inline fun <reified E : Number, reified A : Any> Program<E, A>.getSize(
     adapter: VectorAdapter<E, A>,
     arguments: Array<out Any>,
 ): Int {
@@ -19,19 +19,12 @@ fun <E : Number, A : Any> Program<E, A>.getSize(
     var i = 0
     while (i < instructions.size) {
         val s = when (val instruction = instructions[i++]) {
-            is LoadArgumentInstruction -> when (val value = arguments[instruction.index]) {
-                is BooleanArray,
-                is CharArray,
-                is ByteArray,
-                is ShortArray,
-                is IntArray,
-                is LongArray,
-                is FloatArray,
-                is DoubleArray,
-                is Array<*> -> adapter.sizeof(value as A)
-
-                else -> null
-            }
+            is LoadArgumentInstruction ->
+                when (val argument = arguments[instruction.index]) {
+                    is A -> adapter.sizeof(argument)
+                    is E -> null
+                    else -> error("invalid argument")
+                }
 
             is LoadArrayInstruction ->
                 adapter.sizeof(instruction.value)
@@ -39,12 +32,10 @@ fun <E : Number, A : Any> Program<E, A>.getSize(
             else -> null
         } ?: continue
 
-        require(size == 0 || size == s) {
+        if (size == 0) size = s
+        else require(size == s) {
             "all SIMD input values must have the same length"
         }
-
-        if (size == 0)
-            size = s
     }
 
     return if (size == 0) 1 else size
@@ -68,18 +59,6 @@ operator fun Program<Float, FloatArray>.invoke(
     execute(
         this,
         FloatVectorAdapter,
-        context,
-        arguments,
-    )
-}
-
-operator fun Program<Int, IntArray>.invoke(
-    vararg arguments: Any,
-    context: ExecuteContext<Int, IntArray>,
-) {
-    execute(
-        this,
-        IntVectorAdapter,
         context,
         arguments,
     )
