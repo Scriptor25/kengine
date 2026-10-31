@@ -2,10 +2,9 @@ package dev.scriptor
 
 import dev.scriptor.kengine.KWindow
 import dev.scriptor.kengine.ObjectFile
-import dev.scriptor.kengine.math.Mat4f
-import dev.scriptor.kengine.math.Vec2f
-import dev.scriptor.kengine.math.Vec3f
-import dev.scriptor.kengine.math.Vec4f
+import dev.scriptor.kengine.math.*
+import dev.scriptor.kengine.math.simd.allocate
+import dev.scriptor.kengine.math.simd.invoke
 import dev.scriptor.kengine.pipeline.GraphicsPipeline
 import dev.scriptor.kengine.pipeline.Rasterizer
 import dev.scriptor.kengine.pipeline.Sampler2D
@@ -25,13 +24,12 @@ import java.awt.image.DataBufferInt
 import javax.imageio.ImageIO
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
-import kotlin.math.absoluteValue
 
 object Context {
     @OptIn(ExperimentalAtomicApi::class)
     val running = AtomicBoolean(true)
 
-    const val SCALE = 2
+    const val SCALE = 1
 
     var width: Int = 0
     var height: Int = 0
@@ -71,12 +69,6 @@ object Context {
         depth.fill(Float.MAX_VALUE)
     }
 }
-
-data class Particle(
-    var p: Vec3f,
-    var v: Vec3f,
-    val s: Vec3f,
-)
 
 @OptIn(ExperimentalAtomicApi::class)
 fun main() {
@@ -149,21 +141,124 @@ fun main() {
 
     val boxSize = 20.0f
 
-    val particles = buildList {
-        for (i in 0..1000) {
-            val vx = Math.random().toFloat() * 2.0f - 1.0f
-            val vy = Math.random().toFloat() * 2.0f - 1.0f
-            val vz = Math.random().toFloat() * 2.0f - 1.0f
-            val s = Math.random().toFloat() * 0.8f + 0.1f
+    val particleCount = 1000
+    val particlePX = FloatArray(particleCount)
+    val particlePY = FloatArray(particleCount)
+    val particlePZ = FloatArray(particleCount)
+    val particleVX = FloatArray(particleCount)
+    val particleVY = FloatArray(particleCount)
+    val particleVZ = FloatArray(particleCount)
+    val particleS = FloatArray(particleCount)
 
-            add(
-                Particle(
-                    Vec3f(0.0f, 0.0f, 0.0f),
-                    Vec3f(vx, vy, vz),
-                    Vec3f(s),
-                )
-            )
-        }
+    val particleStep = simdF(1) { [delta] ->
+
+        val px = particlePX.asNode()
+        val py = particlePY.asNode()
+        val pz = particlePZ.asNode()
+        val vx = particleVX.asNode()
+        val vy = particleVY.asNode()
+        val vz = particleVZ.asNode()
+        val s = particleS.asNode()
+
+        val ns = -s
+
+        val ubound = (0.5f * boxSize).asNode()
+        val lbound = (-0.5f * boxSize).asNode()
+
+        val xu = px gt ubound
+        val xl = px lt lbound
+
+        val pxp = select(
+            xu,
+            ubound,
+            select(
+                xl,
+                lbound,
+                px,
+            ),
+        )
+        val vxp = select(
+            xu,
+            abs(vx) * ns,
+            select(
+                xl,
+                abs(vx) * s,
+                vx,
+            ),
+        )
+
+        val yu = py gt ubound
+        val yl = py lt lbound
+
+        val pyp = select(
+            yu,
+            ubound,
+            select(
+                yl,
+                lbound,
+                py,
+            ),
+        )
+        val vyp = select(
+            yu,
+            abs(vy) * ns,
+            select(
+                yl,
+                abs(vy) * s,
+                vy,
+            ),
+        )
+
+        val zu = pz gt ubound
+        val zl = pz lt lbound
+
+        val pzp = select(
+            zu,
+            ubound,
+            select(
+                zl,
+                lbound,
+                pz,
+            ),
+        )
+        val vzp = select(
+            zu,
+            abs(vz) * ns,
+            select(
+                zl,
+                abs(vz) * s,
+                vz,
+            ),
+        )
+
+        export(fma(vxp, delta, pxp))
+        export(fma(vyp, delta, pyp))
+        export(fma(vzp, delta, pzp))
+        export(vxp)
+        export(vyp)
+        export(vzp)
+    }
+
+    val particleStepContext = particleStep.allocate(
+        particlePX, particlePY, particlePZ,
+        particleVX, particleVY, particleVZ,
+    )
+
+    for (i in 0 until particleCount) {
+        val vx = Math.random().toFloat() * 2.0f - 1.0f
+        val vy = Math.random().toFloat() * 2.0f - 1.0f
+        val vz = Math.random().toFloat() * 2.0f - 1.0f
+        val s = Math.random().toFloat() * 0.8f + 0.1f
+
+        particlePX[i] = 0.0f
+        particlePY[i] = 0.0f
+        particlePZ[i] = 0.0f
+
+        particleVX[i] = vx
+        particleVY[i] = vy
+        particleVZ[i] = vz
+
+        particleS[i] = s
     }
 
     val defaultPipeline = GraphicsPipeline(
@@ -199,7 +294,6 @@ fun main() {
     var time = System.nanoTime()
 
     var angle = 0.0f
-    val damp = 1.0f
 
     val cubeImageStream = ClassLoader.getSystemResourceAsStream("cube.png")
     val cubeImage = ImageIO.read(cubeImageStream)
@@ -220,9 +314,9 @@ fun main() {
         }
     }
 
-    val transforms = arrayOfNulls<Any>(2 + particles.size)
-    val models = arrayOfNulls<Any>(2 + particles.size)
-    val normalModels = arrayOfNulls<Any>(2 + particles.size)
+    val transforms = arrayOfNulls<Any>(particleCount)
+    val models = arrayOfNulls<Any>(particleCount)
+    val normalModels = arrayOfNulls<Any>(particleCount)
 
     val vertexUniformValues = arrayOf(transforms, models, normalModels)
     val fragmentUniformValues = arrayOf(sampler)
@@ -241,33 +335,10 @@ fun main() {
 
             println(String.format("%.3fs", delta))
 
-            for (particle in particles) {
-                if (particle.p.x > boxSize * 0.5f) {
-                    particle.p = Vec3f(boxSize * 0.5f, particle.p.y, particle.p.z)
-                    particle.v = Vec3f(-particle.v.x.absoluteValue * damp, particle.v.y, particle.v.z)
-                } else if (particle.p.x < boxSize * -0.5f) {
-                    particle.p = Vec3f(boxSize * -0.5f, particle.p.y, particle.p.z)
-                    particle.v = Vec3f(particle.v.x.absoluteValue * damp, particle.v.y, particle.v.z)
-                }
-
-                if (particle.p.y > boxSize * 0.5f) {
-                    particle.p = Vec3f(particle.p.x, boxSize * 0.5f, particle.p.z)
-                    particle.v = Vec3f(particle.v.x, -particle.v.y.absoluteValue * damp, particle.v.z)
-                } else if (particle.p.y < boxSize * -0.5f) {
-                    particle.p = Vec3f(particle.p.x, boxSize * -0.5f, particle.p.z)
-                    particle.v = Vec3f(particle.v.x, particle.v.y.absoluteValue * damp, particle.v.z)
-                }
-
-                if (particle.p.z > boxSize * 0.5f) {
-                    particle.p = Vec3f(particle.p.x, particle.p.y, boxSize * 0.5f)
-                    particle.v = Vec3f(particle.v.x, particle.v.y, -particle.v.z.absoluteValue * damp)
-                } else if (particle.p.z < boxSize * -0.5f) {
-                    particle.p = Vec3f(particle.p.x, particle.p.y, boxSize * -0.5f)
-                    particle.v = Vec3f(particle.v.x, particle.v.y, particle.v.z.absoluteValue * damp)
-                }
-
-                particle.p += particle.v * delta
-            }
+            particleStep(
+                delta,
+                context = particleStepContext,
+            )
 
             angle += 90.0f * delta
 
@@ -290,53 +361,35 @@ fun main() {
 
                 val pivot = Mat4f.translation(-0.5f, -0.5f, -0.5f)
 
-                run {
+                for (index in 0 until particleCount) {
                     val model = Mat4f.trs(
-                        translation = Vec3f(-1.0f, 0.0f, 0.0f),
-                        rotation = Vec3f(angle, angle * 0.32f, angle * 0.23f),
-                        scale = Vec3f(1.0f),
+                        translation = Vec3f(
+                            particlePX[index],
+                            particlePY[index],
+                            particlePZ[index],
+                        ),
+                        rotation = Vec3f(
+                            particleVX[index] * angle,
+                            particleVY[index] * angle,
+                            particleVZ[index] * angle,
+                        ),
+                        scale = Vec3f(
+                            particleS[index],
+                        ),
                     ) * pivot
                     val normalModel = model.toMat3f().inverse().transpose()
                     val transform = perspective * view * model
 
-                    transforms[0] = transform
-                    models[0] = model
-                    normalModels[0] = normalModel
-                }
-
-                run {
-                    val model = Mat4f.trs(
-                        translation = Vec3f(1.0f, 0.0f, 0.0f),
-                        rotation = Vec3f(angle * 0.43f, angle * 0.17f, angle * 0.67f),
-                        scale = Vec3f(1.0f),
-                    ) * pivot
-                    val normalModel = model.toMat3f().inverse().transpose()
-                    val transform = perspective * view * model
-
-                    transforms[1] = transform
-                    models[1] = model
-                    normalModels[1] = normalModel
-                }
-
-                for ([index, particle] in particles.withIndex()) {
-                    val model = Mat4f.trs(
-                        translation = particle.p,
-                        rotation = particle.v * angle,
-                        scale = particle.s,
-                    ) * pivot
-                    val normalModel = model.toMat3f().inverse().transpose()
-                    val transform = perspective * view * model
-
-                    transforms[2 + index] = transform
-                    models[2 + index] = model
-                    normalModels[2 + index] = normalModel
+                    transforms[index] = transform
+                    models[index] = model
+                    normalModels[index] = normalModel
                 }
 
                 defaultPipeline(
                     surface,
                     cubeMesh,
-                    2,
-                    particles.size,
+                    0,
+                    particleCount,
                     vertexUniformValues,
                     fragmentUniformValues,
                 )

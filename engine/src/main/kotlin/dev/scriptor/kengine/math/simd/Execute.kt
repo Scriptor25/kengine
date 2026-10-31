@@ -14,21 +14,11 @@ inline fun <reified E : Number, reified A : Any> execute(
     val masks = context.masks
     val output = context.output
 
-    when (output) {
-        is ValueOrArray.WithValue -> {
-            require(program.result is ValueOrArray.WithValue)
-            require(adapter.sizeof(output.value) == size)
-        }
+    require(output.size == program.result.size)
 
-        is ValueOrArray.WithArray -> {
-            require(program.result is ValueOrArray.WithArray)
-            require(output.value.size == program.result.value.size)
-
-            var i = 0
-            while (i < output.value.size)
-                require(adapter.sizeof(output.value[i++]) == size)
-        }
-    }
+    var i = 0
+    while (i < output.size)
+        require(adapter.sizeof(output[i++]) == size)
 
     for (offset in 0 until size step adapter.species.length()) {
         val mask: VectorMask<E> = adapter.species.indexInRange(offset, size)

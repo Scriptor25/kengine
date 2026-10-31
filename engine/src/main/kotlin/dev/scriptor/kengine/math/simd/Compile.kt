@@ -10,27 +10,6 @@ class Compile<E : Number, A : Any> {
 
     private fun allocate(): Register = Register(next++)
 
-    operator fun invoke(node: Node<E, A>): Program<E, A> {
-        next = 0
-        registers.clear()
-        instructions.clear()
-
-        val result = visit(node)
-
-        val allocation = RegisterAllocator(
-            instructions,
-            intArrayOf(result.id),
-            next,
-        ).allocate()
-
-        return Program(
-            instructions.map { it.rewrite(allocation.mapping) },
-            wrap(Register(allocation.mapping[result.id])),
-            allocation.vectorCount,
-            allocation.maskCount,
-        )
-    }
-
     operator fun invoke(exports: List<Node<E, A>>): Program<E, A> {
         next = 0
         registers.clear()
@@ -48,7 +27,7 @@ class Compile<E : Number, A : Any> {
 
         return Program(
             instructions.map { it.rewrite(allocation.mapping) },
-            wrap(results.map { Register(allocation.mapping[it.id]) }.toTypedArray()),
+            results.map { Register(allocation.mapping[it.id]) }.toTypedArray(),
             allocation.vectorCount,
             allocation.maskCount,
         )

@@ -151,8 +151,8 @@ class SIMD<E : Number, A : Any> {
         return ComparisonMask(operator, fst, snd)
     }
 
-    fun Node<E, A>.abs(): Node<E, A> {
-        return create(ABS, this)
+    fun abs(fst: Node<E, A>): Node<E, A> {
+        return create(ABS, fst)
     }
 
     operator fun Node<E, A>.unaryMinus(): Node<E, A> {
@@ -363,12 +363,14 @@ class ArgumentList<E : Number, A : Any>(
     operator fun component10(): Node<E, A> = array[9]
     operator fun component11(): Node<E, A> = array[10]
     operator fun component12(): Node<E, A> = array[11]
-}
-
-fun <E : Number, A : Any> simd(
-    node: Node<E, A>,
-): Program<E, A> {
-    return Compile<E, A>()(node)
+    operator fun component13(): Node<E, A> = array[12]
+    operator fun component14(): Node<E, A> = array[13]
+    operator fun component15(): Node<E, A> = array[14]
+    operator fun component16(): Node<E, A> = array[15]
+    operator fun component17(): Node<E, A> = array[16]
+    operator fun component18(): Node<E, A> = array[17]
+    operator fun component19(): Node<E, A> = array[18]
+    operator fun component20(): Node<E, A> = array[19]
 }
 
 fun <E : Number, A : Any> simd(

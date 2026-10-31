@@ -5,7 +5,7 @@ import jdk.incubator.vector.VectorMask
 
 class Program<E : Number, A : Any>(
     val instructions: List<Instruction<E, A>>,
-    val result: ValueOrArray<Register>,
+    val result: Array<Register>,
     val vectorCount: Int,
     val maskCount: Int,
 )
@@ -41,14 +41,14 @@ inline fun <reified E : Number, reified A : Any> Program<E, A>.getSize(
     return if (size == 0) 1 else size
 }
 
-fun <E : Number, A : Any> Program<E, A>.allocate(output: ValueOrArray<A>): ExecuteContext<E, A> {
+fun <E : Number, A : Any> Program<E, A>.allocate(vararg output: A): ExecuteContext<E, A> {
     val vectors = arrayOfNulls<Vector<E>>(vectorCount)
     val masks = arrayOfNulls<VectorMask<E>>(maskCount)
 
     return object : ExecuteContext<E, A> {
         override val vectors: Array<Vector<E>?> = vectors
         override val masks: Array<VectorMask<E>?> = masks
-        override val output: ValueOrArray<A> = output
+        override val output: Array<out A> = output
     }
 }
 

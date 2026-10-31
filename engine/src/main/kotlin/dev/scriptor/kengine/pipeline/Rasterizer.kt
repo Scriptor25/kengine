@@ -3,7 +3,6 @@ package dev.scriptor.kengine.pipeline
 import dev.scriptor.kengine.math.simd.Program
 import dev.scriptor.kengine.math.simd.allocate
 import dev.scriptor.kengine.math.simd.invoke
-import dev.scriptor.kengine.math.simd.wrap
 import dev.scriptor.kengine.math.simdF
 import dev.scriptor.kengine.pipeline.internal.RasterFragment
 import dev.scriptor.kengine.pipeline.internal.RasterTriangle
@@ -41,10 +40,12 @@ private fun createRasterVector(
     inclusive1: Boolean,
     inclusive2: Boolean,
 ): Program<Float, FloatArray> =
-    simdF(12) { [
+    simdF(15) { [
                     row0, row1, row2,
-                    increment0, increment1, increment2,
-                    offset, offsets,
+                    offsetX,
+                    incrementX0, incrementX1, incrementX2,
+                    offsetY,
+                    incrementY0, incrementY1, incrementY2,
                     inverseArea,
                     depth0, depth1, depth2,
                 ] ->
@@ -53,9 +54,9 @@ private fun createRasterVector(
         val one = 1.0f.asNode()
         val none = (-1.0f).asNode()
 
-        val e0 = fma(offset + offsets, increment0, row0)
-        val e1 = fma(offset + offsets, increment1, row1)
-        val e2 = fma(offset + offsets, increment2, row2)
+        val e0 = fma(offsetY, incrementY0, fma(offsetX, incrementX0, row0))
+        val e1 = fma(offsetY, incrementY1, fma(offsetX, incrementX1, row1))
+        val e2 = fma(offsetY, incrementY2, fma(offsetX, incrementX2, row2))
 
         val c0 = if (inclusive0) e0 ge zero else e0 gt zero
         val c1 = if (inclusive1) e1 ge zero else e1 gt zero
@@ -125,71 +126,66 @@ class Rasterizer(
 
         val inverseArea = 1.0f / triangle.area
 
+        val width = maxX - minX + 1
+        val height = maxY - minY + 1
+        val count = width * height
+
         val startX = minX + 0.5f
         val startY = minY + 0.5f
 
-        var row0 = edge(v1, v2, startX, startY)
-        var row1 = edge(v2, v0, startX, startY)
-        var row2 = edge(v0, v1, startX, startY)
+        val start0 = edge(v1, v2, startX, startY)
+        val start1 = edge(v2, v0, startX, startY)
+        val start2 = edge(v0, v1, startX, startY)
 
-        val lanes = maxX - minX + 1
+        val offsetX = FloatArray(count) { (it % width).toFloat() }
+        val offsetY = FloatArray(count) { (it / width).toFloat() }
 
-        val offsets = FloatArray(lanes) { it.toFloat() }
-
-        val depths = FloatArray(lanes)
-        val b0s = FloatArray(lanes)
-        val b1s = FloatArray(lanes)
-        val b2s = FloatArray(lanes)
-
-        val results = arrayOf(depths, b0s, b1s, b2s)
+        val depths = FloatArray(count)
+        val b0s = FloatArray(count)
+        val b1s = FloatArray(count)
+        val b2s = FloatArray(count)
 
         val program = rasterVectorMap[0
                 or if (edge0.inclusive) 0b100 else 0
                 or if (edge1.inclusive) 0b010 else 0
                 or if (edge2.inclusive) 0b001 else 0
         ]!!
-        val context = program.allocate(wrap(results))
+        val context = program.allocate(depths, b0s, b1s, b2s)
 
-        var yi = minY
-        while (yi <= maxY) {
-            val y = yi++
+        program(
+            start0, start1, start2,
+            offsetX,
+            edge0.a, edge1.a, edge2.a,
+            offsetY,
+            edge0.b, edge1.b, edge2.b,
+            inverseArea,
+            v0.depth, v1.depth, v2.depth,
+            context = context,
+        )
 
-            program(
-                row0, row1, row2,
-                edge0.a, edge1.a, edge2.a,
-                0.0f, offsets,
-                inverseArea,
-                v0.depth, v1.depth, v2.depth,
-                context = context,
-            )
+        var ii = 0
+        while (ii < count) {
+            val i = ii++
 
-            var ii = 0
-            while (ii < lanes) {
-                val i = ii++
+            val depth = depths[i]
+            val b0 = b0s[i]
+            val b1 = b1s[i]
+            val b2 = b2s[i]
 
-                val depth = depths[i]
-                val b0 = b0s[i]
-                val b1 = b1s[i]
-                val b2 = b2s[i]
+            if (depth < 0.0f)
+                continue
 
-                if (depth < 0.0f)
-                    continue
-
-                emit(
-                    RasterFragment(
-                        minX + i, y,
-                        depth,
-                        b0, b1, b2,
-                        triangle.v0.invW,
-                        triangle.v1.invW,
-                        triangle.v2.invW,
-                    )
+            emit(
+                RasterFragment(
+                    minX + (i % width),
+                    minY + (i / width),
+                    depth,
+                    b0, b1, b2,
+                    triangle.v0.invW,
+                    triangle.v1.invW,
+                    triangle.v2.invW,
                 )
-            }
-
-            row0 += edge0.b
-            row1 += edge1.b
-            row2 += edge2.b
+            )
         }
     }
 }
