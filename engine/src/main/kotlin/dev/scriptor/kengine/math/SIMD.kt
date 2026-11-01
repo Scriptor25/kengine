@@ -5,8 +5,8 @@ import jdk.incubator.vector.VectorOperators.*
 
 class SIMD<E : Number, A : Any> {
 
-    val exports: List<Node<E, A>>
-        field = mutableListOf<Node<E, A>>()
+    internal var inputs = 0
+    internal val outputs = mutableListOf<Node<E, A>>()
 
     fun E.asNode(): Node<E, A> = ScalarNode(this)
 
@@ -343,62 +343,30 @@ class SIMD<E : Number, A : Any> {
         return SelectNode(mask, fst, snd)
     }
 
-    fun export(node: Node<E, A>) {
-        exports += node
+    fun input(): Node<E, A> {
+        val index = inputs++
+        return ArgumentNode(index)
+    }
+
+    fun output(node: Node<E, A>) {
+        outputs += node
     }
 }
 
-class ArgumentList<E : Number, A : Any>(
-    val array: Array<Node<E, A>>,
-) {
-    operator fun component1(): Node<E, A> = array[0]
-    operator fun component2(): Node<E, A> = array[1]
-    operator fun component3(): Node<E, A> = array[2]
-    operator fun component4(): Node<E, A> = array[3]
-    operator fun component5(): Node<E, A> = array[4]
-    operator fun component6(): Node<E, A> = array[5]
-    operator fun component7(): Node<E, A> = array[6]
-    operator fun component8(): Node<E, A> = array[7]
-    operator fun component9(): Node<E, A> = array[8]
-    operator fun component10(): Node<E, A> = array[9]
-    operator fun component11(): Node<E, A> = array[10]
-    operator fun component12(): Node<E, A> = array[11]
-    operator fun component13(): Node<E, A> = array[12]
-    operator fun component14(): Node<E, A> = array[13]
-    operator fun component15(): Node<E, A> = array[14]
-    operator fun component16(): Node<E, A> = array[15]
-    operator fun component17(): Node<E, A> = array[16]
-    operator fun component18(): Node<E, A> = array[17]
-    operator fun component19(): Node<E, A> = array[18]
-    operator fun component20(): Node<E, A> = array[19]
+fun <E : Number, A : Any> simd(inputs: Int, exports: List<Node<E, A>>): Program<E, A> {
+    return Compile<E, A>()(inputs, exports)
 }
 
-fun <E : Number, A : Any> simd(
-    exports: List<Node<E, A>>,
-): Program<E, A> {
-    return Compile<E, A>()(exports)
-}
-
-fun <E : Number, A : Any> simd(
-    count: Int,
-    block: SIMD<E, A>.(ArgumentList<E, A>) -> Unit,
-): Program<E, A> {
+fun <E : Number, A : Any> simd(block: SIMD<E, A>.() -> Unit): Program<E, A> {
     val context = SIMD<E, A>()
-    val arguments = Array<Node<E, A>>(count) { ArgumentNode(it) }
-    context.block(ArgumentList(arguments))
-    return simd(context.exports)
+    context.block()
+    return simd(context.inputs, context.outputs)
 }
 
-fun simdF(
-    count: Int,
-    block: SIMD<Float, FloatArray>.(ArgumentList<Float, FloatArray>) -> Unit,
-): Program<Float, FloatArray> {
-    return simd(count, block)
+fun simdF(block: SIMD<Float, FloatArray>.() -> Unit): Program<Float, FloatArray> {
+    return simd(block)
 }
 
-fun simdI(
-    count: Int,
-    block: SIMD<Int, IntArray>.(ArgumentList<Int, IntArray>) -> Unit,
-): Program<Int, IntArray> {
-    return simd(count, block)
+fun simdI(block: SIMD<Int, IntArray>.() -> Unit): Program<Int, IntArray> {
+    return simd(block)
 }

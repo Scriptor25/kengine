@@ -4,31 +4,25 @@ import jdk.incubator.vector.VectorMask
 
 inline fun <reified E : Number, reified A : Any> execute(
     program: Program<E, A>,
-    adapter: VectorAdapter<E, A>,
     context: ExecuteContext<E, A>,
     arguments: Array<out Any>,
 ) {
-    // TODO: allow mixed element type vectors
+    require(arguments.size == program.inputs)
+
+    val adapter = context.adapter
+    val vectors = context.vectors
+    val masks = context.masks
+    val outputs = context.outputs
+
+    require(outputs.size == program.result.size)
 
     val size = program.getSize(adapter, arguments)
 
-    val vectors = context.vectors
-    val masks = context.masks
-    val output = context.output
-
-    require(output.size == program.result.size)
-
     var i = 0
-    while (i < output.size)
-        require(adapter.sizeof(output[i++]) == size)
+    while (i < outputs.size)
+        require(adapter.sizeof(outputs[i++]) == size)
 
-    val length = minOf(
-        adapter.species.length()
-    )
-
-    for (offset in 0 until size step length) {
-        val lanes = minOf(length, size - offset)
-
+    for (offset in 0 until size step adapter.species.length()) {
         val mask: VectorMask<E> = adapter.species.indexInRange(offset, size)
 
         var i = 0
@@ -117,7 +111,7 @@ inline fun <reified E : Number, reified A : Any> execute(
         var index = 0
         while (index < program.result.size) {
             adapter.store(
-                output[index],
+                outputs[index],
                 offset,
                 mask,
                 vectors[program.result[index].id]!!,

@@ -3,6 +3,7 @@ package dev.scriptor
 import dev.scriptor.kengine.KWindow
 import dev.scriptor.kengine.ObjectFile
 import dev.scriptor.kengine.math.*
+import dev.scriptor.kengine.math.simd.FloatVectorAdapter
 import dev.scriptor.kengine.math.simd.allocate
 import dev.scriptor.kengine.math.simd.invoke
 import dev.scriptor.kengine.pipeline.GraphicsPipeline
@@ -150,7 +151,8 @@ fun main() {
     val particleVZ = FloatArray(particleCount)
     val particleS = FloatArray(particleCount)
 
-    val particleStep = simdF(1) { [delta] ->
+    val particleStep = simdF {
+        val delta = input()
 
         val px = particlePX.asNode()
         val py = particlePY.asNode()
@@ -231,17 +233,18 @@ fun main() {
             ),
         )
 
-        export(fma(vxp, delta, pxp))
-        export(fma(vyp, delta, pyp))
-        export(fma(vzp, delta, pzp))
-        export(vxp)
-        export(vyp)
-        export(vzp)
+        output(fma(vxp, delta, pxp))
+        output(fma(vyp, delta, pyp))
+        output(fma(vzp, delta, pzp))
+        output(vxp)
+        output(vyp)
+        output(vzp)
     }
 
     val particleStepContext = particleStep.allocate(
         particlePX, particlePY, particlePZ,
         particleVX, particleVY, particleVZ,
+        adapter = FloatVectorAdapter,
     )
 
     for (i in 0 until particleCount) {

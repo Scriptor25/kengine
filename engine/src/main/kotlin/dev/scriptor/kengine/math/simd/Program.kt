@@ -4,6 +4,7 @@ import jdk.incubator.vector.Vector
 import jdk.incubator.vector.VectorMask
 
 class Program<E : Number, A : Any>(
+    val inputs: Int,
     val instructions: List<Instruction<E, A>>,
     val result: Array<Register>,
     val vectorCount: Int,
@@ -41,24 +42,29 @@ inline fun <reified E : Number, reified A : Any> Program<E, A>.getSize(
     return if (size == 0) 1 else size
 }
 
-fun <E : Number, A : Any> Program<E, A>.allocate(vararg output: A): ExecuteContext<E, A> {
+fun <E : Number, A : Any> Program<E, A>.allocate(
+    vararg outputs: A,
+    adapter: VectorAdapter<E, A>,
+): ExecuteContext<E, A> {
+    require(outputs.size == result.size)
+
     val vectors = arrayOfNulls<Vector<E>>(vectorCount)
     val masks = arrayOfNulls<VectorMask<E>>(maskCount)
 
     return object : ExecuteContext<E, A> {
+        override val adapter: VectorAdapter<E, A> = adapter
         override val vectors: Array<Vector<E>?> = vectors
         override val masks: Array<VectorMask<E>?> = masks
-        override val output: Array<out A> = output
+        override val outputs: Array<out A> = outputs
     }
 }
 
-operator fun Program<Float, FloatArray>.invoke(
+inline operator fun <reified E : Number, reified A : Any> Program<E, A>.invoke(
     vararg arguments: Any,
-    context: ExecuteContext<Float, FloatArray>,
+    context: ExecuteContext<E, A>,
 ) {
     execute(
         this,
-        FloatVectorAdapter,
         context,
         arguments,
     )

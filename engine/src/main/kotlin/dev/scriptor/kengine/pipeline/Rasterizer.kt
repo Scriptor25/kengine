@@ -1,5 +1,6 @@
 package dev.scriptor.kengine.pipeline
 
+import dev.scriptor.kengine.math.simd.FloatVectorAdapter
 import dev.scriptor.kengine.math.simd.Program
 import dev.scriptor.kengine.math.simd.allocate
 import dev.scriptor.kengine.math.simd.invoke
@@ -40,23 +41,37 @@ private fun createRasterVector(
     inclusive1: Boolean,
     inclusive2: Boolean,
 ): Program<Float, FloatArray> =
-    simdF(15) { [
-                    row0, row1, row2,
-                    offsetX,
-                    incrementX0, incrementX1, incrementX2,
-                    offsetY,
-                    incrementY0, incrementY1, incrementY2,
-                    inverseArea,
-                    depth0, depth1, depth2,
-                ] ->
+    simdF {
+        val start0 = input()
+        val start1 = input()
+        val start2 = input()
+
+        val offsetX = input()
+
+        val incrementX0 = input()
+        val incrementX1 = input()
+        val incrementX2 = input()
+
+        val offsetY = input()
+
+        val incrementY0 = input()
+        val incrementY1 = input()
+        val incrementY2 = input()
+
+        val inverseArea = input()
+
+        val depth0 = input()
+        val depth1 = input()
+        val depth2 = input()
+
 
         val zero = 0.0f.asNode()
         val one = 1.0f.asNode()
         val none = (-1.0f).asNode()
 
-        val e0 = fma(offsetY, incrementY0, fma(offsetX, incrementX0, row0))
-        val e1 = fma(offsetY, incrementY1, fma(offsetX, incrementX1, row1))
-        val e2 = fma(offsetY, incrementY2, fma(offsetX, incrementX2, row2))
+        val e0 = fma(offsetY, incrementY0, fma(offsetX, incrementX0, start0))
+        val e1 = fma(offsetY, incrementY1, fma(offsetX, incrementX1, start1))
+        val e2 = fma(offsetY, incrementY2, fma(offsetX, incrementX2, start2))
 
         val c0 = if (inclusive0) e0 ge zero else e0 gt zero
         val c1 = if (inclusive1) e1 ge zero else e1 gt zero
@@ -78,10 +93,10 @@ private fun createRasterVector(
 
         val depth = max(zero, min(z, one))
 
-        export(select(coverage, depth, none))
-        export(select(coverage, b0, zero))
-        export(select(coverage, b1, zero))
-        export(select(coverage, b2, zero))
+        output(select(coverage, depth, none))
+        output(select(coverage, b0, zero))
+        output(select(coverage, b1, zero))
+        output(select(coverage, b2, zero))
     }
 
 private val rasterVectorMap = listOf(0b000, 0b001, 0b010, 0b011, 0b100, 0b101, 0b110, 0b111)
@@ -150,7 +165,11 @@ class Rasterizer(
                 or if (edge1.inclusive) 0b010 else 0
                 or if (edge2.inclusive) 0b001 else 0
         ]!!
-        val context = program.allocate(depths, b0s, b1s, b2s)
+        val context = program.allocate(
+            depths,
+            b0s, b1s, b2s,
+            adapter = FloatVectorAdapter,
+        )
 
         program(
             start0, start1, start2,

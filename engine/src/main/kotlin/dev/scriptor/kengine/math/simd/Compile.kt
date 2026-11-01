@@ -10,12 +10,12 @@ class Compile<E : Number, A : Any> {
 
     private fun allocate(): Register = Register(next++)
 
-    operator fun invoke(exports: List<Node<E, A>>): Program<E, A> {
+    operator fun invoke(inputs: Int, outputs: List<Node<E, A>>): Program<E, A> {
         next = 0
         registers.clear()
         instructions.clear()
 
-        val results = exports
+        val results = outputs
             .map(::visit)
             .toTypedArray()
 
@@ -26,6 +26,7 @@ class Compile<E : Number, A : Any> {
         ).allocate()
 
         return Program(
+            inputs,
             instructions.map { it.rewrite(allocation.mapping) },
             results.map { Register(allocation.mapping[it.id]) }.toTypedArray(),
             allocation.vectorCount,
