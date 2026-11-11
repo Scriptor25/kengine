@@ -4,6 +4,5 @@ name = "engine"
 [library]
 package = "jar"
 sources = true
-include = ["main"]
 
 [sources.main]

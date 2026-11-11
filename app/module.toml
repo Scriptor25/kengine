@@ -3,7 +3,6 @@ name = "app"
 
 [application]
 main = "dev.scriptor.MainKt"
-include = ["main"]
 
 [sources.main]
 
