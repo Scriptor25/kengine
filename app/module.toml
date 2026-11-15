@@ -1,5 +1,4 @@
 type = "application"
-name = "app"
 
 [application]
 main = "dev.scriptor.MainKt"
@@ -7,4 +6,6 @@ main = "dev.scriptor.MainKt"
 [sources.main]
 
 [dependencies]
-modules = ["engine"]
+modules = [
+    "engine",
+]

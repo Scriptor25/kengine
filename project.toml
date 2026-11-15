@@ -1,20 +1,28 @@
-name = "kengine"
-
 [artifact]
 group = "dev.example"
 version = "1.0.0"
 
 [modules]
-include = ["app", "engine"]
+include = [
+    "app",
+    "engine",
+]
 
 [repositories]
-maven = ["https://repo1.maven.org/maven2/"]
+maven = [
+    "local",
+    "https://repo1.maven.org/maven2/",
+]
 
 [dependencies]
-maven = ["org.jetbrains.kotlin:kotlin-stdlib:2.5.0-Beta2"]
+maven = [
+    "org.jetbrains.kotlin:kotlin-stdlib:2.4.21",
+]
 
 [compiler]
 platform = "jvm"
 
 [compiler.jvm]
-addModules = ["jdk.incubator.vector"]
+addModules = [
+    "jdk.incubator.vector",
+]

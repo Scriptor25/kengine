@@ -155,7 +155,7 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
             "fragment uniform size mismatch"
         }
 
-        for ([uniform, value] in vertexShaderLayout.uniforms.zip(vertexUniformValues)) {
+        for ((uniform, value) in vertexShaderLayout.uniforms.zip(vertexUniformValues)) {
             when (value) {
                 is Array<*> -> {
                     require(value.size == firstInstance + instanceCount) {
@@ -172,7 +172,7 @@ class GraphicsPipeline<V : VertexShaderLayout, F : FragmentShaderLayout>(
             }
         }
 
-        for ([uniform, value] in fragmentShaderLayout.uniforms.zip(fragmentUniformValues)) {
+        for ((uniform, value) in fragmentShaderLayout.uniforms.zip(fragmentUniformValues)) {
             require(uniform.type.isInstance(value)) {
                 "fragment uniform type mismatch"
             }

@@ -1,8 +1,6 @@
 type = "library"
-name = "engine"
 
 [library]
-package = "jar"
 sources = true
 
 [sources.main]
