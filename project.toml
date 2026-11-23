@@ -22,6 +22,9 @@ maven = [
 [compiler]
 platform = "jvm"
 
+[compiler.common]
+kotlinVersion = "2.4.21"
+
 [compiler.jvm]
 addModules = [
     "jdk.incubator.vector",
